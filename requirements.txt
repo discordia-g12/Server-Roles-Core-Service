@@ -1,6 +1,6 @@
-fastapi
-uvicorn[standard]
-pydantic-settings
-sqlalchemy
-asyncpg
-alembic
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic-settings>=2.0
+sqlalchemy>=2.0
+asyncpg>=0.29
+alembic>=1.13
