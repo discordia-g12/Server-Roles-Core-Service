@@ -91,3 +91,43 @@ Un chequeo de permiso completo es entonces una operación bitwise en memoria
   requiere saber que el bit 2 es `MANAGE_ROLES`). Se acepta este costo a
   cambio de la velocidad de chequeo; el catálogo `permissions` existe
   justamente para no tener que memorizar los números.
+
+## Owner y rol base al crear un servidor
+
+- **Owner = bypass, no un rol.** `servers.owner_id` ya identifica al dueño.
+  En vez de crearle un rol "Admin" editable con `ADMINISTRATOR` prendido,
+  el chequeo de permisos hace bypass directo cuando
+  `user_id == server.owner_id`, antes de mirar bitmasks. Esto evita que el
+  owner pierda acceso a su propio servidor si alguien (incluido él mismo)
+  edita o borra mal el rol que se lo otorgaba — el mismo problema que
+  Discord evita reservando el rol `@everyone` como no eliminable, aplicado
+  acá al owner directamente.
+- **Rol `@everyone` como nivel de acceso base.** Al crear el servidor se
+  crea automáticamente un `Role` con `is_default=True`, posición 0, y un
+  `permissions_bitmask` reducido (ver, mandar mensajes, conectarse a voz,
+  reaccionar, etc. — sin `MANAGE_*`, `KICK_MEMBERS`, `BAN_MEMBERS` ni
+  `ADMINISTRATOR`). Todo miembro nuevo recibe este rol vía
+  `role_assignments` al unirse (incluido el owner, que además tiene el
+  bypass). El set de permisos por defecto vive como constante
+  `DEFAULT_ROLE_PERMISSIONS` en `app/core/permissions.py`, no hardcodeado
+  en la migración de seed ni en el repositorio.
+- **Por qué no "el primer rol creado es admin por convención":** Discord
+  real no le da rol de administrador automático al dueño — usa exactamente
+  el mismo mecanismo de owner-bypass. Replicarlo evita además un bug común:
+  si el "rol admin" del owner fuera un `Role` común, cualquier otro
+  `MANAGE_ROLES` podría editarlo o borrarlo.
+
+### Consecuencia
+
+El chequeo de permisos efectivo pasa a tener un paso previo al bitmask:
+```pyhton3
+si user_id == server.owner_id:
+permitido = true
+si no:
+base = OR de permissions_bitmask de todos los roles asignados al miembro
+efectivo = (base & ~deny_bitmask_canal) | allow_bitmask_canal
+permitido = (efectivo & PERMISO_CHEQUEADO) != 0
+```
+
+Esto agrega una comparación extra (`user_id == owner_id`) a cada chequeo,
+despreciable en costo frente a los JOINs que ya evita el modelo bitmask.
