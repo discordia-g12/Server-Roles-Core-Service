@@ -60,3 +60,13 @@ class RoleRepository:
                 
         return False
 
+    async def get_role_by_id(
+        self, db: AsyncSession, server_id: uuid.UUID, role_id: uuid.UUID
+    ) -> Role | None:
+        query = select(Role).where(Role.server_id == server_id, Role.id == role_id)
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
+
+    async def delete_role(self, db: AsyncSession, role: Role) -> None:
+        await db.delete(role)
+        await db.commit()
