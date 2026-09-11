@@ -71,3 +71,13 @@ async def create_role_endpoint(
 ):
     service = RoleService(RoleRepository())
     return await service.create_role(db, server_id, user_id, role_data)
+
+@router.delete("/servers/{server_id}/roles/{role_id}", status_code=204)
+async def delete_role_endpoint(
+    server_id: uuid.UUID,
+    role_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user_id: uuid.UUID = Depends(get_current_user_id),
+):
+    service = RoleService(RoleRepository())
+    await service.delete_role(db, server_id, user_id, role_id)
