@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/v1", tags=["servers"])
 # MOCK DE AUTH: Función que luego se reemplazará por la validación del Token JWT
 # NO OLVIDARSE DE CAMBIAR ESTO!!!
 async def get_current_user_id(
-    x_user_id: uuid.UUID = Header(..., description="ID del usuario (Simula Auth)")
+    x_user_id: uuid.UUID = Header(..., description="User ID (Mocks Auth)")
 ) -> uuid.UUID:
     return x_user_id
 
@@ -49,3 +49,12 @@ async def create_channel_endpoint(
     service = ChannelService(ChannelRepository())
     return await service.create_channel(db, server_id, user_id, channel_data)
 
+@router.delete("/servers/{server_id}/channels/{channel_id}", status_code=204)
+async def delete_channel_endpoint(
+    server_id: uuid.UUID,
+    channel_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user_id: uuid.UUID = Depends(get_current_user_id),
+):
+    service = ChannelService(ChannelRepository())
+    await service.delete_channel(db, server_id, user_id, channel_id)

@@ -23,11 +23,11 @@ class ServerService:
         icon_url = None
         if icon is not None:
             if icon.content_type not in VALID_ICON_TYPES:
-                raise HTTPException(400, "Formato no soportado. Usa JPEG, PNG o WebP.")
+                raise HTTPException(400, "Unsupported format. Use JPEG, PNG or WebP.")
 
             file_bytes = await icon.read()
             if len(file_bytes) > MAX_FILE_SIZE:
-                raise HTTPException(400, "Archivo demasiado grande. Límite 5MB.")
+                raise HTTPException(400, "File too large. Limit 5MB.")
 
             # icon_url = await s3_provider.upload(file_bytes)  # TODO: definir storage
 
