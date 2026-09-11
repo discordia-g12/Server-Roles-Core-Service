@@ -10,6 +10,9 @@ from app.db.session import get_db
 from app.repositories.server import ServerRepository
 from app.schemas.server import ServerCreate, ServerResponse
 from app.services.server import ServerService
+from app.schemas.role import RoleCreate, RoleResponse
+from app.repositories.role import RoleRepository
+from app.services.role import RoleService
 
 router = APIRouter(prefix="/api/v1", tags=["servers"])
 
@@ -58,3 +61,13 @@ async def delete_channel_endpoint(
 ):
     service = ChannelService(ChannelRepository())
     await service.delete_channel(db, server_id, user_id, channel_id)
+
+@router.post("/servers/{server_id}/roles", response_model=RoleResponse, status_code=201)
+async def create_role_endpoint(
+    server_id: uuid.UUID,
+    role_data: RoleCreate,
+    db: AsyncSession = Depends(get_db),
+    user_id: uuid.UUID = Depends(get_current_user_id),
+):
+    service = RoleService(RoleRepository())
+    return await service.create_role(db, server_id, user_id, role_data)
