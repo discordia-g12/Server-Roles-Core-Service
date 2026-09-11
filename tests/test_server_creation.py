@@ -1,9 +1,9 @@
+import uuid
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
-
 client = TestClient(app)
-
+fake_headers = {"x-user-id": str(uuid.uuid4())}
 def test_create_server_success_generates_default_channels():
     """
     Given a user provides a valid server name and confirms creation,
@@ -12,7 +12,7 @@ def test_create_server_success_generates_default_channels():
     """
     payload = {"name": "My Awesome Gaming Server"}
     
-    response = client.post("/api/v1/servers", data=payload)
+    response = client.post("/api/v1/servers", data=payload, headers=fake_headers)
     
     assert response.status_code == 201
     data = response.json()
@@ -31,8 +31,6 @@ def test_create_server_success_generates_default_channels():
     assert "Voz General" in channel_names
     assert "text" in channel_types
     assert "voice" in channel_types
-
-
 def test_create_server_success_with_valid_icon():
     """
     Given a user provides a valid server name and a valid image icon,
@@ -41,11 +39,10 @@ def test_create_server_success_with_valid_icon():
     payload = {"name": "Community Hub"}
     files = {"icon": ("icon.png", b"fake_png_bytes", "image/png")}
     
-    response = client.post("/api/v1/servers", data=payload, files=files)
+    response = client.post("/api/v1/servers", data=payload, files=files, headers=fake_headers)
     
     assert response.status_code == 201
     assert response.json()["name"] == "Community Hub"
-
 @pytest.mark.parametrize("invalid_name", [
     "",             
     "A" * 101,     
@@ -59,11 +56,10 @@ def test_create_server_fails_with_invalid_name(invalid_name):
     """
     payload = {"name": invalid_name}
     
-    response = client.post("/api/v1/servers", data=payload)
+    response = client.post("/api/v1/servers", data=payload, headers=fake_headers)
     
     assert response.status_code == 422
     assert "detail" in response.json()
-
 def test_create_server_fails_with_unsupported_icon_format():
     """
     Given a user uploads an icon with an unsupported format (e.g., PDF or GIF),
@@ -73,12 +69,10 @@ def test_create_server_fails_with_unsupported_icon_format():
     payload = {"name": "Invalid Icon Server"}
     files = {"icon": ("document.pdf", b"fake_pdf_bytes", "application/pdf")}
     
-    response = client.post("/api/v1/servers", data=payload, files=files)
+    response = client.post("/api/v1/servers", data=payload, files=files, headers=fake_headers)
     
     assert response.status_code == 400
     assert "Usa JPEG, PNG o WebP" in response.json()["detail"]
-
-
 def test_create_server_fails_with_oversized_icon():
     """
     Given a user uploads an icon that exceeds the maximum allowed size (5MB),
@@ -89,7 +83,7 @@ def test_create_server_fails_with_oversized_icon():
     large_file_bytes = b"0" * ((5 * 1024 * 1024) + 1) 
     files = {"icon": ("huge.png", large_file_bytes, "image/png")}
     
-    response = client.post("/api/v1/servers", data=payload, files=files)
+    response = client.post("/api/v1/servers", data=payload, files=files, headers=fake_headers)
     
     assert response.status_code == 400
     assert "Límite 5MB" in response.json()["detail"]
