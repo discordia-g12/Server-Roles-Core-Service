@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, File, Form, UploadFile, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.channel import ChannelCreate, ChannelResponse
+from app.schemas.channel import ChannelCreate, ChannelResponse, ChannelUpdate
 from app.repositories.channel import ChannelRepository
 from app.services.channel import ChannelService
 from app.db.session import get_db
@@ -61,6 +61,17 @@ async def delete_channel_endpoint(
 ):
     service = ChannelService(ChannelRepository())
     await service.delete_channel(db, server_id, user_id, channel_id)
+
+@router.patch("/servers/{server_id}/channels/{channel_id}", response_model=ChannelResponse, status_code=200)
+async def update_channel_endpoint(
+    server_id: uuid.UUID,
+    channel_id: uuid.UUID,
+    channel_data: ChannelUpdate,
+    db: AsyncSession = Depends(get_db),
+    user_id: uuid.UUID = Depends(get_current_user_id),
+):
+    service = ChannelService(ChannelRepository())
+    return await service.update_channel(db, server_id, user_id, channel_id, channel_data)
 
 @router.post("/servers/{server_id}/roles", response_model=RoleResponse, status_code=201)
 async def create_role_endpoint(
