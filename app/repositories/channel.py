@@ -91,3 +91,12 @@ class ChannelRepository:
         db.add(event)
         await db.delete(channel)
         await db.commit()
+
+    async def update_channel(
+        self, db: AsyncSession, channel: Channel, update_data: dict
+    ) -> Channel:
+        for key, value in update_data.items():
+            setattr(channel, key, value)
+        await db.commit()
+        await db.refresh(channel)
+        return channel
