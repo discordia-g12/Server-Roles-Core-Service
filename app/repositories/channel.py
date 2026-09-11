@@ -7,6 +7,7 @@ from app.models.server import Server
 from app.models.role import Role
 from app.models.server_member import ServerMember
 from app.models.role_assignment import RoleAssignment
+from app.models.outbox_event import OutboxEvent
 from app.core.permissions import Permission
 
 class ChannelRepository:
@@ -71,3 +72,22 @@ class ChannelRepository:
                 return True
                 
         return False
+
+    async def get_channel_by_id(
+        self, db: AsyncSession, server_id: uuid.UUID, channel_id: uuid.UUID
+    ) -> Channel | None:
+        query = select(Channel).where(
+            Channel.server_id == server_id,
+            Channel.id == channel_id
+        )
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
+
+    async def delete_channel(self, db: AsyncSession, channel: Channel) -> None:
+        event = OutboxEvent(
+            routing_key="channel.deleted",
+            payload={"channel_id": str(channel.id), "server_id": str(channel.server_id)}
+        )
+        db.add(event)
+        await db.delete(channel)
+        await db.commit()

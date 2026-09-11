@@ -72,7 +72,7 @@ def test_create_server_fails_with_unsupported_icon_format():
     response = client.post("/api/v1/servers", data=payload, files=files, headers=fake_headers)
     
     assert response.status_code == 400
-    assert "Usa JPEG, PNG o WebP" in response.json()["detail"]
+    assert "Use JPEG, PNG or WebP" in response.json()["detail"]
 def test_create_server_fails_with_oversized_icon():
     """
     Given a user uploads an icon that exceeds the maximum allowed size (5MB),
@@ -86,4 +86,4 @@ def test_create_server_fails_with_oversized_icon():
     response = client.post("/api/v1/servers", data=payload, files=files, headers=fake_headers)
     
     assert response.status_code == 400
-    assert "Límite 5MB" in response.json()["detail"]
+    assert "Limit 5MB" in response.json()["detail"]
