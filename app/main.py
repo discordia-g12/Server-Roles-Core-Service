@@ -2,9 +2,11 @@ from fastapi import FastAPI, Response, status
 from sqlalchemy import text
 
 from app.api.server import router as server_router
+from app.core.exceptions import register_exception_handlers
 from app.db import engine
 
 app = FastAPI(title="Server Roles Core Service")
+register_exception_handlers(app)
 app.include_router(server_router)
 
 @app.get("/")
