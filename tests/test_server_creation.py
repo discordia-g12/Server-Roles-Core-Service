@@ -87,3 +87,34 @@ def test_create_server_fails_with_oversized_icon():
     
     assert response.status_code == 400
     assert "Limit 5MB" in response.json()["detail"]
+
+
+def test_create_server_success_with_auth0_user_id():
+    """
+    Given a request contains an Auth0 string-formatted user ID (e.g. 'auth0|123456'),
+    When the server is created,
+    Then the server is created successfully and owner_id preserves the Auth0 ID.
+    """
+    auth0_id = "auth0|66e6a1234567890abcdef123"
+    payload = {"name": "Auth0 Test Guild"}
+    headers = {"x-user-id": auth0_id}
+
+    response = client.post("/api/v1/servers", data=payload, headers=headers)
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["name"] == "Auth0 Test Guild"
+    assert data["owner_id"] == auth0_id
+
+
+def test_create_server_fails_when_x_user_id_header_missing():
+    """
+    Given a request lacks the x-user-id header,
+    When the client attempts to create a server,
+    Then the request is rejected with HTTP 401 Unauthorized.
+    """
+    payload = {"name": "Unauthenticated Server"}
+    response = client.post("/api/v1/servers", data=payload)
+
+    assert response.status_code == 401
+    assert "Unauthenticated user identity" in response.json()["detail"]

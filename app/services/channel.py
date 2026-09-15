@@ -10,7 +10,7 @@ class ChannelService:
         self.repo = repo
 
     async def create_channel(
-        self, db: AsyncSession, server_id: uuid.UUID, user_id: uuid.UUID, channel_data: ChannelCreate
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, channel_data: ChannelCreate
     ):
         has_permission = await self.repo.check_user_can_manage_channels(db, server_id, user_id)
         if not has_permission:
@@ -33,7 +33,7 @@ class ChannelService:
         )
 
     async def delete_channel(
-        self, db: AsyncSession, server_id: uuid.UUID, user_id: uuid.UUID, channel_id: uuid.UUID
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, channel_id: uuid.UUID
     ):
         has_permission = await self.repo.check_user_can_manage_channels(db, server_id, user_id)
         if not has_permission:
@@ -52,7 +52,7 @@ class ChannelService:
         await self.repo.delete_channel(db, channel)
 
     async def update_channel(
-        self, db: AsyncSession, server_id: uuid.UUID, user_id: uuid.UUID, channel_id: uuid.UUID, channel_data: ChannelUpdate
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, channel_id: uuid.UUID, channel_data: ChannelUpdate
     ):
         has_permission = await self.repo.check_user_can_manage_channels(db, server_id, user_id)
         if not has_permission:

@@ -16,7 +16,7 @@ class ServerService:
     async def create_server(
         self,
         db: AsyncSession,
-        owner_id: uuid.UUID,
+        owner_id: str,
         server_name: str,
         icon: UploadFile | None,
     ):

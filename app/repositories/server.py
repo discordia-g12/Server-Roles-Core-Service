@@ -12,7 +12,7 @@ from app.models.server_member import ServerMember
 
 class ServerRepository:
     async def create_server_with_defaults(
-        self, db: AsyncSession, owner_id: uuid.UUID, name: str, icon_url: str | None
+        self, db: AsyncSession, owner_id: str, name: str, icon_url: str | None
     ) -> Server:
         server = Server(owner_id=owner_id, name=name, icon_url=icon_url)
         db.add(server)

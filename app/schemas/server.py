@@ -9,7 +9,7 @@ class ServerCreate(BaseModel):
 
 class ServerResponse(BaseModel):
     id: UUID
-    owner_id: UUID
+    owner_id: str
     name: str
     icon_url: str | None
     created_at: datetime

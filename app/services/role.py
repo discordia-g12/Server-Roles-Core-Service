@@ -9,7 +9,7 @@ class RoleService:
         self.repo = repo
 
     async def create_role(
-        self, db: AsyncSession, server_id: uuid.UUID, user_id: uuid.UUID, role_data: RoleCreate
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_data: RoleCreate
     ):
         has_permission = await self.repo.check_user_can_manage_roles(db, server_id, user_id)
         if not has_permission:
@@ -21,7 +21,7 @@ class RoleService:
         return await self.repo.create_role(db, server_id, role_data.name, role_data.color)
 
     async def delete_role(
-        self, db: AsyncSession, server_id: uuid.UUID, user_id: uuid.UUID, role_id: uuid.UUID
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_id: uuid.UUID
     ):
         has_permission = await self.repo.check_user_can_manage_roles(db, server_id, user_id)
         if not has_permission:

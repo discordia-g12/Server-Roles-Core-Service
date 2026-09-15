@@ -32,7 +32,7 @@ class RoleRepository:
         return role
 
     async def check_user_can_manage_roles(
-        self, db: AsyncSession, server_id: uuid.UUID, user_id: uuid.UUID
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str
     ) -> bool:
         server = await db.scalar(select(Server).where(Server.id == server_id))
         if not server:
