@@ -70,3 +70,26 @@ class RoleRepository:
     async def delete_role(self, db: AsyncSession, role: Role) -> None:
         await db.delete(role)
         await db.commit()
+    
+    async def update_role_permissions(self, db: AsyncSession, role: Role, new_permissions_bitmask: int) -> Role:
+        role.permissions_bitmask = new_permissions_bitmask
+        db.add(role)
+        await db.commit()
+        await db.refresh(role)
+        return role
+
+    async def user_has_role(self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_id: uuid.UUID) -> bool:
+        query = (
+            select(func.count())
+            .select_from(RoleAssignment)
+            .join(ServerMember, ServerMember.id == RoleAssignment.server_member_id)
+            .where(
+                ServerMember.server_id == server_id,
+                ServerMember.user_id == user_id,
+                RoleAssignment.role_id == role_id
+            )
+        )
+        result = await db.execute(query)
+        count = result.scalar()
+        return count > 0
+    
