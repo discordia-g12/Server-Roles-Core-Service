@@ -109,3 +109,39 @@ class RoleRepository:
         )
         result = await db.execute(query)
         return result.scalars().all()
+    
+    async def get_member_by_user_id(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> ServerMember | None:
+        query = select(ServerMember).where(ServerMember.server_id == server_id, ServerMember.user_id == user_id)
+        result = await db.execute(query)
+        return result.scalar_one_or_none()
+
+    async def assign_role(self, db: AsyncSession, server_member_id: uuid.UUID, role_id: uuid.UUID) -> None:
+        already_assigned = await db.scalar(
+            select(func.count())
+            .select_from(RoleAssignment)
+            .where(
+                RoleAssignment.server_member_id == server_member_id,
+                RoleAssignment.role_id == role_id,
+            )
+        )
+        if already_assigned:
+            return
+
+        assignment = RoleAssignment(server_member_id=server_member_id, role_id=role_id)
+        db.add(assignment)
+        await db.commit()
+
+    async def remove_role_assignment(self, db: AsyncSession, server_member_id: uuid.UUID, role_id: uuid.UUID) -> bool:
+        query = select(RoleAssignment).where(
+            RoleAssignment.server_member_id == server_member_id,
+            RoleAssignment.role_id == role_id,
+        )
+        result = await db.execute(query)
+        assignment = result.scalar_one_or_none()
+        if not assignment:
+            return False
+
+        await db.delete(assignment)
+        await db.commit()
+        return True
+
