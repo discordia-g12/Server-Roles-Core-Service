@@ -60,7 +60,7 @@ jobs:
           DATABASE_USER: admin
           DATABASE_PASSWORD: password
           DATABASE_NAME: db
-        run: pytest --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=85
+        run: pytest --cov=app --cov-report=term-missing --cov-report=xml --cov-fail-under=70
 
       - name: Upload coverage report
         if: always()

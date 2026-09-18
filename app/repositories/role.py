@@ -96,7 +96,9 @@ class RoleRepository:
         count = result.scalar()
         return count > 0
 
-    async def get_members_by_role(self, db: AsyncSession, server_id: uuid.UUID, role_id: uuid.UUID) -> list[ServerMember]:
+    async def get_members_by_role(
+        self, db: AsyncSession, server_id: uuid.UUID, role_id: uuid.UUID
+    ) -> list[ServerMember]:
         query = (
             select(ServerMember)
             .join(RoleAssignment, RoleAssignment.server_member_id == ServerMember.id)
