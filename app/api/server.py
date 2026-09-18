@@ -117,3 +117,27 @@ async def get_role_members_endpoint(
 ):
     service = RoleService(RoleRepository())
     return await service.get_members_by_role(db, server_id, user_id, role_id)
+
+
+@router.put("/servers/{server_id}/roles/{role_id}/members/{target_user_id}", status_code=204)
+async def assign_role_endpoint(
+    server_id: uuid.UUID,
+    role_id: uuid.UUID,
+    target_user_id: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = RoleService(RoleRepository())
+    await service.assign_role_to_member(db, server_id, user_id, role_id, target_user_id)
+
+
+@router.delete("/servers/{server_id}/roles/{role_id}/members/{target_user_id}", status_code=204)
+async def remove_role_endpoint(
+    server_id: uuid.UUID,
+    role_id: uuid.UUID,
+    target_user_id: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = RoleService(RoleRepository())
+    await service.remove_role_from_member(db, server_id, user_id, role_id, target_user_id)
