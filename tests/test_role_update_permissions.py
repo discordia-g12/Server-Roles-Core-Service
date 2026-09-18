@@ -52,7 +52,7 @@ def update_role_permissions(server_id: str, role_id: str, user_id: str, new_bitm
     headers = {"x-user-id": user_id}
     return client.patch(
         f"/api/v1/servers/{server_id}/roles/{role_id}/permissions",
-        params={"new_permissions_bitmask": new_bitmask},
+        json={"new_permissions_bitmask": new_bitmask},
         headers=headers,
     )
 
