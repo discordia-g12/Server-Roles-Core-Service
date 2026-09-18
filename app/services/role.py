@@ -105,3 +105,10 @@ class RoleService:
                 status_code=404,
                 detail="Member does not have this role assigned."
             )
+
+    async def set_default_role(
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_id: uuid.UUID
+    ):
+        await self._require_manage_permission(db, server_id, user_id)
+        role = await self._get_role(db, server_id, role_id)
+        return await self.repo.set_default_role(db, server_id, role)
