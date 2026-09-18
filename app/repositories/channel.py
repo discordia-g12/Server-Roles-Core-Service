@@ -1,14 +1,16 @@
 import uuid
-from sqlalchemy import select, func
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.channel import Channel
-from app.models.server import Server
-from app.models.role import Role
-from app.models.server_member import ServerMember
-from app.models.role_assignment import RoleAssignment
-from app.models.outbox_event import OutboxEvent
 from app.core.permissions import Permission
+from app.models.channel import Channel
+from app.models.outbox_event import OutboxEvent
+from app.models.role import Role
+from app.models.role_assignment import RoleAssignment
+from app.models.server import Server
+from app.models.server_member import ServerMember
+
 
 class ChannelRepository:
     async def get_channel_by_name_and_category(

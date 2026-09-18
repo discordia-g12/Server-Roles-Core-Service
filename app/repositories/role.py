@@ -1,11 +1,14 @@
 import uuid
-from sqlalchemy import select, func
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.permissions import DEFAULT_ROLE_PERMISSIONS, Permission
 from app.models.role import Role
+from app.models.role_assignment import RoleAssignment
 from app.models.server import Server
 from app.models.server_member import ServerMember
-from app.models.role_assignment import RoleAssignment
-from app.core.permissions import Permission, DEFAULT_ROLE_PERMISSIONS
+
 
 class RoleRepository:
     async def get_next_position(self, db: AsyncSession, server_id: uuid.UUID) -> int:
@@ -93,7 +96,9 @@ class RoleRepository:
         count = result.scalar()
         return count > 0
 
-    async def get_members_by_role(self, db: AsyncSession, server_id: uuid.UUID, role_id: uuid.UUID) -> list[ServerMember]:
+    async def get_members_by_role(
+        self, db: AsyncSession, server_id: uuid.UUID, role_id: uuid.UUID
+    ) -> list[ServerMember]:
         query = (
             select(ServerMember)
             .join(RoleAssignment, RoleAssignment.server_member_id == ServerMember.id)

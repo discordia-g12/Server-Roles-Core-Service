@@ -1,9 +1,12 @@
 import uuid
+
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.permissions import Permission
 from app.repositories.role import RoleRepository
 from app.schemas.role import RoleCreate
-from app.core.permissions import Permission
+
 
 class RoleService:
     def __init__(self, repo: RoleRepository):

@@ -1,10 +1,9 @@
-import pytest
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.main import app
-from app.db.session import get_db
 from app.core.config import settings
+from app.db.session import get_db
+from app.main import app
 
 test_engine = create_async_engine(settings.database_url, poolclass=NullPool)
 TestingSessionLocal = async_sessionmaker(test_engine, expire_on_commit=False, class_=AsyncSession)

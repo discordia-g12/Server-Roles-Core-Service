@@ -1,9 +1,11 @@
 import uuid
+
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.channel import ChannelRepository
 from app.schemas.channel import ChannelCreate, ChannelUpdate
+
 
 class ChannelService:
     def __init__(self, repo: ChannelRepository):

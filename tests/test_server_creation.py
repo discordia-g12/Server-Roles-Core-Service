@@ -1,7 +1,10 @@
 import uuid
+
 import pytest
 from fastapi.testclient import TestClient
+
 from app.main import app
+
 client = TestClient(app)
 fake_headers = {"x-user-id": str(uuid.uuid4())}
 def test_create_server_success_generates_default_channels():
