@@ -1,14 +1,5 @@
-import uuid
-import pytest
 from fastapi.testclient import TestClient
 
-from app.core.exceptions import problem_response
-from app.exceptions import (
-    AppException,
-    BadRequestError,
-    ForbiddenError,
-    NotFoundError,
-)
 from app.main import app
 
 client = TestClient(app)

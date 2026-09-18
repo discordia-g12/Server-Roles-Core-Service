@@ -1,4 +1,3 @@
-import uuid
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession

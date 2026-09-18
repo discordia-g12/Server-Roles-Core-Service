@@ -1,11 +1,14 @@
 import uuid
-from sqlalchemy import select, func
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.permissions import DEFAULT_ROLE_PERMISSIONS, Permission
 from app.models.role import Role
+from app.models.role_assignment import RoleAssignment
 from app.models.server import Server
 from app.models.server_member import ServerMember
-from app.models.role_assignment import RoleAssignment
-from app.core.permissions import Permission, DEFAULT_ROLE_PERMISSIONS
+
 
 class RoleRepository:
     async def get_next_position(self, db: AsyncSession, server_id: uuid.UUID) -> int:

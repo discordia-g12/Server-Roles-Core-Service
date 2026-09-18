@@ -1,9 +1,9 @@
 import uuid
-from sqlalchemy.sql import func
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import func
 
 from app.core.permissions import Permission
 from app.db.session import get_db

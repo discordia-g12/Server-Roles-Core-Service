@@ -1,6 +1,8 @@
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, Field
 from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
 
 class RoleCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)

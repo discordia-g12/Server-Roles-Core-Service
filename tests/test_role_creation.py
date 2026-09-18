@@ -1,6 +1,8 @@
 import uuid
+
 import pytest
 from fastapi.testclient import TestClient
+
 from app.main import app
 
 client = TestClient(app)
@@ -17,7 +19,8 @@ def test_create_role_success():
     CA 1: Successful creation
     Given a user with permissions provides a valid name for a new role
     When they confirm the creation
-    Then the role is created with a default set of permissions, positioned at the end of the server's role hierarchy, and available for assignment.
+    Then the role is created with a default set of permissions, positioned at the
+    end of the server's role hierarchy, and available for assignment.
     """
     owner_id = str(uuid.uuid4())
     server_id = create_test_server(owner_id)
@@ -33,7 +36,7 @@ def test_create_role_success():
     assert data["color"] == "#ff0000"
     assert "id" in data
     assert data["position"] == 1
-    assert data["is_default"] == False
+    assert not data["is_default"]
     assert data["permissions_bitmask"] > 0
 
 def test_create_role_fails_without_permissions():
