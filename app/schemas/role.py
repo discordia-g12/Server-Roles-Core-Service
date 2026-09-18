@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field
 from uuid import UUID
 
@@ -12,6 +13,14 @@ class RoleResponse(BaseModel):
     position: int
     permissions_bitmask: int
     is_default: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+class RoleMemberResponse(BaseModel):
+    id: UUID
+    user_id: str
+    nickname: str | None
+    joined_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
 
