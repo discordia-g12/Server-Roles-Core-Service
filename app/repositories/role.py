@@ -145,3 +145,17 @@ class RoleRepository:
         await db.commit()
         return True
 
+    async def set_default_role(self, db: AsyncSession, server_id: uuid.UUID, role: Role) -> Role:
+        previous_default = await db.scalar(
+            select(Role).where(Role.server_id == server_id, Role.is_default.is_(True))
+        )
+        if previous_default and previous_default.id != role.id:
+            previous_default.is_default = False
+            db.add(previous_default)
+
+        role.is_default = True
+        db.add(role)
+        await db.commit()
+        await db.refresh(role)
+        return role
+
