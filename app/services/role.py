@@ -40,6 +40,10 @@ class RoleService:
             )
         return member
 
+    async def get_roles(self, db: AsyncSession, server_id: uuid.UUID, user_id: str):
+        await self._require_manage_permission(db, server_id, user_id)
+        return await self.repo.get_roles_by_server(db, server_id)
+
     async def create_role(
         self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_data: RoleCreate
     ):
