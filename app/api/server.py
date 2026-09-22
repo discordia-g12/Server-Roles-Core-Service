@@ -79,6 +79,16 @@ async def update_channel_endpoint(
     return await service.update_channel(db, server_id, user_id, channel_id, channel_data)
 
 
+@router.get("/servers/{server_id}/roles", response_model=list[RoleResponse], status_code=200)
+async def get_roles_endpoint(
+    server_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = RoleService(RoleRepository())
+    return await service.get_roles(db, server_id, user_id)
+
+
 @router.post("/servers/{server_id}/roles", response_model=RoleResponse, status_code=201)
 async def create_role_endpoint(
     server_id: uuid.UUID,

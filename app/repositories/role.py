@@ -11,6 +11,11 @@ from app.models.server_member import ServerMember
 
 
 class RoleRepository:
+    async def get_roles_by_server(self, db: AsyncSession, server_id: uuid.UUID) -> list[Role]:
+        query = select(Role).where(Role.server_id == server_id).order_by(Role.position)
+        result = await db.execute(query)
+        return list(result.scalars().all())
+
     async def get_next_position(self, db: AsyncSession, server_id: uuid.UUID) -> int:
         query = select(func.max(Role.position)).where(Role.server_id == server_id)
         result = await db.execute(query)
