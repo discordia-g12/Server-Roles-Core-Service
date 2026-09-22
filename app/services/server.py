@@ -12,6 +12,9 @@ class ServerService:
     def __init__(self, repo: ServerRepository):
         self.repo = repo
 
+    async def get_user_servers(self, db: AsyncSession, user_id: str):
+        return await self.repo.get_user_servers(db, user_id)
+
     async def create_server(
         self,
         db: AsyncSession,

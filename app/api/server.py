@@ -18,6 +18,15 @@ from app.services.server import ServerService
 router = APIRouter(prefix="/api/v1", tags=["servers"])
 
 
+@router.get("/servers", response_model=list[ServerResponse], status_code=200)
+async def get_user_servers_endpoint(
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = ServerService(ServerRepository())
+    return await service.get_user_servers(db, user_id)
+
+
 @router.post("/servers", response_model=ServerResponse, status_code=201)
 async def create_server_endpoint(
     name: str = Form(..., min_length=1, max_length=100, pattern=r"^[^\x00]+$"),

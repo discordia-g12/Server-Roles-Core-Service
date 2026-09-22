@@ -1,4 +1,5 @@
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import DEFAULT_ROLE_PERMISSIONS
@@ -10,6 +11,16 @@ from app.models.server_member import ServerMember
 
 
 class ServerRepository:
+    async def get_user_servers(self, db: AsyncSession, user_id: str) -> list[Server]:
+        stmt = (
+            select(Server)
+            .join(ServerMember, ServerMember.server_id == Server.id)
+            .where(ServerMember.user_id == user_id)
+            .order_by(Server.created_at.asc())
+        )
+        result = await db.execute(stmt)
+        return list(result.scalars().all())
+
     async def create_server_with_defaults(
         self, db: AsyncSession, owner_id: str, name: str, icon_url: str | None
     ) -> Server:
