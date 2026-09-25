@@ -29,3 +29,6 @@ class RoleMemberResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class RoleUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=100)
+    color: str | None = Field(None, pattern="^#[0-9a-fA-F]{6}$")

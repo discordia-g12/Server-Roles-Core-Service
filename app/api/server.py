@@ -9,7 +9,7 @@ from app.repositories.channel import ChannelRepository
 from app.repositories.role import RoleRepository
 from app.repositories.server import ServerRepository
 from app.schemas.channel import ChannelCreate, ChannelResponse, ChannelUpdate
-from app.schemas.role import RoleCreate, RoleMemberResponse, RoleResponse, RoleUpdatePermissions
+from app.schemas.role import RoleCreate, RoleMemberResponse, RoleResponse, RoleUpdate, RoleUpdatePermissions
 from app.schemas.server import ServerCreate, ServerResponse
 from app.services.channel import ChannelService
 from app.services.role import RoleService
@@ -171,3 +171,14 @@ async def set_default_role_endpoint(
 ):
     service = RoleService(RoleRepository())
     return await service.set_default_role(db, server_id, user_id, role_id)
+
+@router.patch("/servers/{server_id}/roles/{role_id}", response_model=RoleResponse, status_code=200)
+async def update_role_endpoint(
+    server_id: uuid.UUID,
+    role_id: uuid.UUID,
+    role_data: RoleUpdate,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = RoleService(RoleRepository())
+    return await service.update_role(db, server_id, user_id, role_id, role_data) 

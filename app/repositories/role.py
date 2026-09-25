@@ -164,3 +164,12 @@ class RoleRepository:
         await db.refresh(role)
         return role
 
+    async def update_role(self, db: AsyncSession, role: Role, name: str | None, color: str | None) -> Role:
+        if name is not None:
+            role.name = name
+        if color is not None:
+            role.color = color
+        db.add(role)
+        await db.commit()
+        await db.refresh(role)
+        return role
