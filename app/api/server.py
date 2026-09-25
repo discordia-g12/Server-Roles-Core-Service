@@ -171,3 +171,12 @@ async def set_default_role_endpoint(
 ):
     service = RoleService(RoleRepository())
     return await service.set_default_role(db, server_id, user_id, role_id)
+
+@router.delete("/servers/{server_id}/leave", status_code=204)
+async def leave_server_endpoint(
+    server_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = ServerService(ServerRepository())
+    await service.leave_server(db, server_id, user_id)

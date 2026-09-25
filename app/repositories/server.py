@@ -8,6 +8,7 @@ from app.models.role import Role
 from app.models.role_assignment import RoleAssignment
 from app.models.server import Server
 from app.models.server_member import ServerMember
+import uuid
 
 
 class ServerRepository:
@@ -51,3 +52,20 @@ class ServerRepository:
         await db.commit()
         await db.refresh(server, attribute_names=["channels"])
         return server
+
+    async def get_server_by_id(self, db: AsyncSession, server_id: uuid.UUID) -> Server | None:
+        stmt = select(Server).where(Server.id == server_id)
+        result = await db.execute(stmt)
+        return result.scalars().first()
+    
+    async def get_server_member(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> ServerMember | None:
+        stmt = select(ServerMember).where(
+            ServerMember.server_id == server_id,
+            ServerMember.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        return result.scalars().first()
+    
+    async def remove_member(self, db: AsyncSession, member: ServerMember) -> None:
+        await db.delete(member)
+        await db.commit()
