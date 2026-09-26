@@ -1,11 +1,10 @@
+import uuid
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
-import uuid
-from app.exceptions import ServerNotFoundError, BadRequestError
 
+from app.exceptions import BadRequestError, ServerNotFoundError
 from app.repositories.server import ServerRepository
-
 
 MAX_FILE_SIZE = 5 * 1024 * 1024
 VALID_ICON_TYPES = {"image/jpeg", "image/png", "image/webp"}
@@ -44,10 +43,22 @@ class ServerService:
             raise ServerNotFoundError()
         
         if server.owner_id == user_id:
-            raise BadRequestError("Owners cannot leave their own server directly. Transfer ownership or delete the server first.")
+            raise BadRequestError("Owners cannot leave their own server directly. Transfer ownership or delete the server first.")  # noqa: E501
             
         member = await self.repo.get_server_member(db, server_id, user_id)
         if not member:
             raise BadRequestError("You are not a member of this server.")
             
         await self.repo.remove_member(db, member)
+
+    async def get_server_members(
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, limit: int, offset: int
+    ) -> dict:
+        server = await self.repo.get_server_by_id(db, server_id)
+        if not server:
+            raise HTTPException(status_code=404, detail="Server not found.")
+        if not await self.repo.is_member(db, server_id, user_id):
+            raise HTTPException(status_code=403, detail="You are not a member of this server.")
+
+        items, total = await self.repo.get_members_page(db, server_id, limit, offset)
+        return {"items": items, "total": total, "limit": limit, "offset": offset}
