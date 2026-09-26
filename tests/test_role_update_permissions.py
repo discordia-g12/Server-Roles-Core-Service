@@ -7,7 +7,7 @@ from sqlalchemy import select
 from app.core.permissions import Permission
 from app.main import app
 from app.models.role import Role
-from tests.conftest import TestingSessionLocal
+from tests import db_utils
 
 client = TestClient(app)
 
@@ -39,7 +39,7 @@ def get_default_role_id(server_id: str) -> str:
     setup/discovery, not the behavior under test.
     """
     async def _fetch():
-        async with TestingSessionLocal() as db:
+        async with db_utils.TestingSessionLocal() as db:
             result = await db.execute(
                 select(Role).where(Role.server_id == server_id, Role.is_default.is_(True))
             )

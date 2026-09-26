@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.models.role_assignment import RoleAssignment
 from app.models.server_member import ServerMember
-from tests.conftest import TestingSessionLocal
+from tests import db_utils
 
 client = TestClient(app)
 
@@ -38,7 +38,7 @@ def assign_role_to_user(server_id: str, role_id: str, user_id: str, nickname: st
     """
 
     async def _assign():
-        async with TestingSessionLocal() as db:
+        async with db_utils.TestingSessionLocal() as db:
             member = ServerMember(server_id=uuid.UUID(server_id), user_id=user_id, nickname=nickname)
             db.add(member)
             await db.flush()

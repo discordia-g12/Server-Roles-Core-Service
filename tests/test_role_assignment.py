@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models.server_member import ServerMember
-from tests.conftest import TestingSessionLocal
+from tests import db_utils
 
 client = TestClient(app)
 
@@ -37,7 +37,7 @@ def create_test_member(server_id: str, user_id: str, nickname: str | None = None
     """
 
     async def _create():
-        async with TestingSessionLocal() as db:
+        async with db_utils.TestingSessionLocal() as db:
             member = ServerMember(server_id=uuid.UUID(server_id), user_id=user_id, nickname=nickname)
             db.add(member)
             await db.commit()

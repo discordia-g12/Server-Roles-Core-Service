@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.main import app
 from app.models.role import Role
-from tests.conftest import TestingSessionLocal
+from tests import db_utils
 
 client = TestClient(app)
 
@@ -46,7 +46,7 @@ def get_everyone_role_id(server_id: str) -> str:
     straight from the DB, same approach used elsewhere in the test suite.
     """
     async def _fetch():
-        async with TestingSessionLocal() as db:
+        async with db_utils.TestingSessionLocal() as db:
             result = await db.execute(
                 select(Role).where(Role.server_id == server_id, Role.name == "@everyone")
             )

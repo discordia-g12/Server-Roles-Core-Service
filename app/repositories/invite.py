@@ -36,7 +36,9 @@ class InviteRepository:
     async def get_invite_by_code(self, db: AsyncSession, code: str) -> ServerInvite | None:
         return await db.scalar(select(ServerInvite).where(ServerInvite.code == code))
 
-    async def get_invite_by_code_and_server(self, db: AsyncSession, code: str, server_id: uuid.UUID) -> ServerInvite | None:
+    async def get_invite_by_code_and_server(
+        self, db: AsyncSession, code: str, server_id: uuid.UUID
+    ) -> ServerInvite | None:
         return await db.scalar(
             select(ServerInvite).where(
                 ServerInvite.code == code, 
