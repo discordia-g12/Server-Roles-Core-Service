@@ -7,7 +7,7 @@ from app.core.permissions import Permission
 from app.models.role import Role
 from app.models.server_member import ServerMember
 from app.repositories.role import RoleRepository
-from app.schemas.role import RoleCreate
+from app.schemas.role import RoleCreate, RoleUpdate
 
 
 class RoleService:
@@ -116,3 +116,15 @@ class RoleService:
         await self._require_manage_permission(db, server_id, user_id)
         role = await self._get_role(db, server_id, role_id)
         return await self.repo.set_default_role(db, server_id, role)
+
+    async def update_role(
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_id: uuid.UUID, update_data: RoleUpdate
+    ):
+        await self._require_manage_permission(db, server_id, user_id)
+        role = await self._get_role(db, server_id, role_id)
+        if role.is_default and update_data.name is not None and update_data.name != role.name:
+            raise HTTPException(
+                status_code=400,
+                detail="Cannot change the name of the default server role."
+            )
+        return await self.repo.update_role(db, role, update_data.name, update_data.color)
