@@ -14,7 +14,9 @@ from app.schemas.server import ServerCreate, ServerMemberPage, ServerResponse
 from app.services.channel import ChannelService
 from app.services.role import RoleService
 from app.services.server import ServerService
-
+from app.repositories.invite import InviteRepository
+from app.services.invite import InviteService
+from app.schemas.invite import InviteCreate, InviteResponse
 router = APIRouter(prefix="/api/v1", tags=["servers"])
 
 
@@ -194,3 +196,35 @@ async def update_role_endpoint(
 ):
     service = RoleService(RoleRepository())
     return await service.update_role(db, server_id, user_id, role_id, role_data) 
+
+
+@router.post("/servers/{server_id}/invites", response_model=InviteResponse, status_code=201)
+async def create_invite_endpoint(
+    server_id: uuid.UUID,
+    invite_data: InviteCreate,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = InviteService(InviteRepository())
+    return await service.create_invite(
+        db, server_id, user_id, invite_data.max_uses, invite_data.expires_in_seconds
+    )
+
+@router.delete("/servers/{server_id}/invites/{code}", status_code=204)
+async def revoke_invite_endpoint(
+    server_id: uuid.UUID,
+    code: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = InviteService(InviteRepository())
+    await service.revoke_invite(db, server_id, user_id, code)
+@router.post("/invites/{code}/join", status_code=200)
+async def join_server_via_invite_endpoint(
+    code: str,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = InviteService(InviteRepository())
+    server_id = await service.join_server(db, user_id, code)
+    return {"server_id": server_id}
