@@ -1,3 +1,4 @@
+import uuid
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,3 +35,15 @@ class ServerService:
             # icon_url = await s3_provider.upload(file_bytes)  # TODO: definir storage
 
         return await self.repo.create_server_with_defaults(db, owner_id, server_name, icon_url)
+
+    async def get_server_members(
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, limit: int, offset: int
+    ) -> dict:
+        server = await self.repo.get_server_by_id(db, server_id)
+        if not server:
+            raise HTTPException(status_code=404, detail="Server not found.")
+        if not await self.repo.is_member(db, server_id, user_id):
+            raise HTTPException(status_code=403, detail="You are not a member of this server.")
+
+        items, total = await self.repo.get_members_page(db, server_id, limit, offset)
+        return {"items": items, "total": total, "limit": limit, "offset": offset}

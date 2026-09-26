@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_id
@@ -10,7 +10,7 @@ from app.repositories.role import RoleRepository
 from app.repositories.server import ServerRepository
 from app.schemas.channel import ChannelCreate, ChannelResponse, ChannelUpdate
 from app.schemas.role import RoleCreate, RoleMemberResponse, RoleResponse, RoleUpdate, RoleUpdatePermissions
-from app.schemas.server import ServerCreate, ServerResponse
+from app.schemas.server import ServerCreate, ServerMemberPage, ServerResponse
 from app.services.channel import ChannelService
 from app.services.role import RoleService
 from app.services.server import ServerService
@@ -43,6 +43,18 @@ async def create_server_endpoint(
     return created_server
 
 
+
+
+@router.get("/servers/{server_id}/members", response_model=ServerMemberPage, status_code=200)
+async def get_server_members_endpoint(
+    server_id: uuid.UUID,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = ServerService(ServerRepository())
+    return await service.get_server_members(db, server_id, user_id, limit, offset)
 
 
 @router.post("/servers/{server_id}/channels", response_model=ChannelResponse, status_code=201)
