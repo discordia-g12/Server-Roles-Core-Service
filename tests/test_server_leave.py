@@ -3,9 +3,9 @@ import uuid
 
 from fastapi.testclient import TestClient
 
+import tests.db_utils as db_utils
 from app.main import app
 from app.models.server_member import ServerMember
-from tests.conftest import TestingSessionLocal
 
 client = TestClient(app)
 
@@ -25,7 +25,7 @@ def add_member_to_server(server_id: str, user_id: str) -> str:
     todavía no hay endpoint de 'join server').
     """
     async def _add():
-        async with TestingSessionLocal() as db:
+        async with db_utils.TestingSessionLocal() as db:
             member = ServerMember(server_id=uuid.UUID(server_id), user_id=user_id)
             db.add(member)
             await db.commit()

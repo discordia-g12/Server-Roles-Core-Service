@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.models.server_member import ServerMember
-from tests.conftest import TestingSessionLocal
+from tests import db_utils
 
 client = TestClient(app)
 
@@ -44,7 +44,7 @@ def create_test_members(server_id: str, count: int) -> list[str]:
 
     async def _create():
         user_ids = [str(uuid.uuid4()) for _ in range(count)]
-        async with TestingSessionLocal() as db:
+        async with db_utils.TestingSessionLocal() as db:
             for user_id in user_ids:
                 db.add(ServerMember(server_id=uuid.UUID(server_id), user_id=user_id))
             await db.commit()
