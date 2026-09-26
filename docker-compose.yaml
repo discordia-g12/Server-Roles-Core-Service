@@ -17,6 +17,11 @@ services:
   app:
     build: .
     container_name: discordia_server_core_app
+    volumes:
+      - .:/app
+    command: >
+      bash -c "alembic upgrade head && 
+               uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload"
     ports:
       - "8080"
     environment:

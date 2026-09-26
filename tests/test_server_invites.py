@@ -194,3 +194,77 @@ def test_revoke_with_malformed_code_returns_404_not_crash(malformed_code):
     )
 
     assert response.status_code == 404
+
+def test_join_server_success():
+    """
+    Given a valid active invite
+    When a new user attempts to join using the code
+    Then they successfully join and the server_id is returned.
+    """
+    owner_id = str(uuid.uuid4())
+    server_id = create_test_server(owner_id)
+    
+    res_create = client.post(
+        f"/api/v1/servers/{server_id}/invites", 
+        json={"max_uses": 10}, 
+        headers={"x-user-id": owner_id}
+    )
+    code = res_create.json()["code"]
+    
+    new_user_id = str(uuid.uuid4())
+    res_join = client.post(
+        f"/api/v1/invites/{code}/join", 
+        headers={"x-user-id": new_user_id}
+    )
+    
+    assert res_join.status_code == 200
+    assert res_join.json()["server_id"] == server_id
+
+def test_revoke_invite_without_permissions():
+    """
+    Given an active invite
+    When a user without permissions (or not in the server) tries to revoke it
+    Then it returns a 403 Forbidden.
+    """
+    owner_id = str(uuid.uuid4())
+    server_id = create_test_server(owner_id)
+    
+    res_create = client.post(
+        f"/api/v1/servers/{server_id}/invites", 
+        json={"max_uses": 10}, 
+        headers={"x-user-id": owner_id}
+    )
+    code = res_create.json()["code"]
+    
+    random_user_id = str(uuid.uuid4())
+    res_revoke = client.delete(
+        f"/api/v1/servers/{server_id}/invites/{code}", 
+        headers={"x-user-id": random_user_id}
+    )
+    
+    assert res_revoke.status_code == 403
+
+def test_join_already_member():
+    """
+    Given an active invite
+    When a user who is already a member uses it
+    Then the system should handle it idempotently and return 200.
+    """
+    owner_id = str(uuid.uuid4())
+    server_id = create_test_server(owner_id)
+    
+    res_create = client.post(
+        f"/api/v1/servers/{server_id}/invites", 
+        json={"max_uses": 10}, 
+        headers={"x-user-id": owner_id}
+    )
+    code = res_create.json()["code"]
+    
+    # owner joining their own server
+    res_join = client.post(
+        f"/api/v1/invites/{code}/join", 
+        headers={"x-user-id": owner_id}
+    )
+    
+    assert res_join.status_code == 200
+    assert res_join.json()["server_id"] == server_id
