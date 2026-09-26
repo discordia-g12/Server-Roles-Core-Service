@@ -18,3 +18,17 @@ class ServerResponse(BaseModel):
     channels: list[ChannelResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ServerMemberResponse(BaseModel):
+    id: UUID
+    user_id: str
+    nickname: str | None
+    role_ids: list[UUID]
+
+
+class ServerMemberPage(BaseModel):
+    items: list[ServerMemberResponse]
+    total: int
+    limit: int
+    offset: int

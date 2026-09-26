@@ -1,5 +1,7 @@
 
-from sqlalchemy import select
+import uuid
+
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import DEFAULT_ROLE_PERMISSIONS
@@ -51,3 +53,47 @@ class ServerRepository:
         await db.commit()
         await db.refresh(server, attribute_names=["channels"])
         return server
+
+    async def get_server_by_id(self, db: AsyncSession, server_id: uuid.UUID) -> Server | None:
+        return await db.scalar(select(Server).where(Server.id == server_id))
+
+    async def is_member(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> bool:
+        member_id = await db.scalar(
+            select(ServerMember.id).where(ServerMember.server_id == server_id, ServerMember.user_id == user_id)
+        )
+        return member_id is not None
+
+    async def get_members_page(
+        self, db: AsyncSession, server_id: uuid.UUID, limit: int, offset: int
+    ) -> tuple[list[dict], int]:
+        total = await db.scalar(
+            select(func.count()).select_from(ServerMember).where(ServerMember.server_id == server_id)
+        )
+
+        members_query = (
+            select(ServerMember)
+            .where(ServerMember.server_id == server_id)
+            .order_by(ServerMember.joined_at.asc(), ServerMember.id.asc())
+            .limit(limit)
+            .offset(offset)
+        )
+        members = list((await db.execute(members_query)).scalars().all())
+
+        role_ids_by_member: dict[uuid.UUID, list[uuid.UUID]] = {member.id: [] for member in members}
+        if members:
+            assignments_query = select(RoleAssignment.server_member_id, RoleAssignment.role_id).where(
+                RoleAssignment.server_member_id.in_(list(role_ids_by_member))
+            )
+            for member_id, role_id in (await db.execute(assignments_query)).all():
+                role_ids_by_member[member_id].append(role_id)
+
+        items = [
+            {
+                "id": member.id,
+                "user_id": member.user_id,
+                "nickname": member.nickname,
+                "role_ids": role_ids_by_member[member.id],
+            }
+            for member in members
+        ]
+        return items, total or 0
