@@ -110,3 +110,86 @@ async def can_send_message(
         raise HTTPException(status_code=403, detail="User does not have permission to send messages in this channel")
         
     return {"can_send": True}
+
+
+@router.get("/channels/{channel_id}/can-connect", status_code=200)
+async def can_connect(
+    channel_id: uuid.UUID,
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    channel = await db.scalar(select(Channel).where(Channel.id == channel_id))
+    if not channel:
+        raise HTTPException(status_code=404, detail="Channel not found")
+        
+    server_id = channel.server_id
+    
+    member = await db.scalar(
+        select(ServerMember).where(
+            ServerMember.server_id == server_id, ServerMember.user_id == user_id
+        )
+    )
+    if not member:
+        raise HTTPException(status_code=403, detail="User is not a member of the server")
+        
+    ban = await db.scalar(
+        select(ServerBan).where(
+            ServerBan.server_id == server_id, ServerBan.user_id == user_id
+        )
+    )
+    if ban:
+        raise HTTPException(status_code=403, detail="User is banned from the server")
+        
+
+    server = await db.scalar(select(Server).where(Server.id == server_id))
+    if server.owner_id == user_id:
+        return {"can_connect": True}
+        
+    roles = await db.execute(
+        select(Role)
+        .join(RoleAssignment, RoleAssignment.role_id == Role.id)
+        .where(RoleAssignment.server_member_id == member.id)
+    )
+    roles = roles.scalars().all()
+    
+    base_permissions = 0
+    role_ids = []
+    for role in roles:
+        base_permissions |= role.permissions_bitmask
+        role_ids.append(role.id)
+        
+    if (base_permissions & Permission.ADMINISTRATOR.value) != 0:
+        return {"can_connect": True}
+        
+    conditions = [ChannelPermissionOverride.server_member_id == member.id]
+    if role_ids:
+        conditions.append(ChannelPermissionOverride.role_id.in_(role_ids))
+        
+    overrides = await db.execute(
+        select(ChannelPermissionOverride).where(
+            ChannelPermissionOverride.channel_id == channel_id,
+            or_(*conditions)
+        )
+    )
+    overrides = overrides.scalars().all()
+    
+    role_allow = 0
+    role_deny = 0
+    member_allow = 0
+    member_deny = 0
+    
+    for override in overrides:
+        if override.role_id:
+            role_allow |= override.allow_bitmask
+            role_deny |= override.deny_bitmask
+        if override.server_member_id:
+            member_allow |= override.allow_bitmask
+            member_deny |= override.deny_bitmask
+            
+    effective = (base_permissions & ~role_deny) | role_allow
+    effective = (effective & ~member_deny) | member_allow
+    
+    if (effective & Permission.CONNECT.value) == 0:
+        raise HTTPException(status_code=403, detail="User does not have permission to connect to this voice channel")
+        
+    return {"can_connect": True}
