@@ -268,3 +268,44 @@ def test_join_already_member():
     
     assert res_join.status_code == 200
     assert res_join.json()["server_id"] == server_id
+def test_get_invite_preview_success():
+    """
+    Given a valid active invite
+    When a user fetches the invite preview
+    Then it returns the server name, icon, description and member count.
+    """
+    owner_id = str(uuid.uuid4())
+    server_id = create_test_server(owner_id)
+    
+    res_create = client.post(
+        f"/api/v1/servers/{server_id}/invites", 
+        json={"max_uses": 10}, 
+        headers={"x-user-id": owner_id}
+    )
+    code = res_create.json()["code"]
+    
+    new_user_id = str(uuid.uuid4())
+    res_preview = client.get(
+        f"/api/v1/invites/{code}", 
+        headers={"x-user-id": new_user_id}
+    )
+    
+    assert res_preview.status_code == 200
+    data = res_preview.json()
+    assert data["server_id"] == server_id
+    assert data["code"] == code
+    assert "server_name" in data
+    assert data["member_count"] >= 1
+
+def test_get_invite_preview_invalid_code():
+    """
+    Given an invalid or revoked invite code
+    When a user fetches the invite preview
+    Then it returns a 404 Not Found error.
+    """
+    new_user_id = str(uuid.uuid4())
+    res_preview = client.get(
+        "/api/v1/invites/invalid-code-xyz", 
+        headers={"x-user-id": new_user_id}
+    )
+    assert res_preview.status_code == 404

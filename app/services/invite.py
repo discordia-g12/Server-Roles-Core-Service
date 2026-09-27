@@ -3,6 +3,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -126,6 +127,29 @@ class InviteService:
             
         await db.commit()
         return updated_invite
+
+
+    async def get_invite_preview(self, db: AsyncSession, code: str):
+        
+        invite = await self.repository.get_invite_by_code(db, code)
+        if not invite or invite.is_revoked:
+            raise HTTPException(status_code=404, detail="Invite not found or revoked")
+            
+        server = await self.repository.get_server(db, invite.server_id)
+        if not server:
+            raise HTTPException(status_code=404, detail="Server not found")
+            
+        member_count_query = select(func.count()).select_from(ServerMember).where(ServerMember.server_id == server.id)
+        member_count = await db.scalar(member_count_query)
+        
+        return {
+            "code": invite.code,
+            "server_id": invite.server_id,
+            "server_name": server.name,
+            "server_description": getattr(server, 'description', None),
+            "server_icon": getattr(server, 'icon', None),
+            "member_count": member_count or 0
+        }
 
     async def join_server(self, db: AsyncSession, user_id: str, code: str) -> uuid.UUID:
         """
