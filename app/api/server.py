@@ -10,7 +10,7 @@ from app.repositories.invite import InviteRepository
 from app.repositories.role import RoleRepository
 from app.repositories.server import ServerRepository
 from app.schemas.channel import ChannelCreate, ChannelResponse, ChannelUpdate
-from app.schemas.invite import InviteCreate, InviteResponse
+from app.schemas.invite import InviteCreate, InviteResponse, InvitePreviewResponse
 from app.schemas.role import RoleCreate, RoleMemberResponse, RoleResponse, RoleUpdate, RoleUpdatePermissions
 from app.schemas.server import ServerCreate, ServerMemberPage, ServerResponse
 from app.services.channel import ChannelService
@@ -230,6 +230,15 @@ async def revoke_invite_endpoint(
     service = InviteService(InviteRepository())
     await service.revoke_invite(db, server_id, user_id, code)
     
+
+@router.get("/invites/{code}", status_code=200)
+async def get_invite_preview_endpoint(
+    code: str,
+    db: AsyncSession = Depends(get_db)
+):
+    service = InviteService(InviteRepository())
+    return await service.get_invite_preview(db, code)
+
 @router.post("/invites/{code}/join", status_code=200)
 async def join_server_via_invite_endpoint(
     code: str,

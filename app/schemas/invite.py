@@ -18,3 +18,19 @@ class InviteResponse(BaseModel):
     is_revoked: bool
     
     model_config = ConfigDict(from_attributes=True)
+class InvitePreviewResponse(BaseModel):
+    code: str
+    server_id: UUID
+    server_name: str
+    server_description: str | None
+    server_icon: str | None
+    member_count: int
+
+
+class InvitePreviewResponse(BaseModel):
+    code: str
+    server_id: UUID
+    server_name: str
+    server_description: str | None = None
+    server_icon: str | None = None
+    member_count: int
