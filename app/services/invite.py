@@ -3,6 +3,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,11 +12,6 @@ from app.models.role_assignment import RoleAssignment
 from app.models.server_invite import ServerInvite
 from app.models.server_member import ServerMember
 from app.repositories.invite import InviteRepository
-
-from sqlalchemy import select, func
-from app.models.server_member import ServerMember
-from app.models.server import Server
-from fastapi import HTTPException
 
 MAX_RETRIES_CODE = 3
 class InviteService:
