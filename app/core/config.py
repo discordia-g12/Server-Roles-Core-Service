@@ -6,7 +6,7 @@ from sqlalchemy import URL
 
 class Settings(BaseSettings):
     environment: str = "development"
-    host: str = "0.0.0.0"
+    host: str = "0.0.0.0"  # nosec B104 - must bind all interfaces to be reachable inside the Docker network
     port: int = 8080
 
     database_host: str

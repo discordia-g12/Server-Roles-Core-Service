@@ -7,6 +7,7 @@ from app.models.role import Role
 from app.models.role_assignment import RoleAssignment
 from app.models.server import Server
 from app.models.server_ban import ServerBan
+from app.models.server_invite import ServerInvite
 from app.models.server_member import ServerMember
 from app.models.server_mute import ServerMute
 
@@ -22,4 +23,5 @@ __all__ = [
     "RoleAssignment",
     "ChannelPermissionOverride",
     "OutboxEvent",
+    "ServerInvite",
 ]

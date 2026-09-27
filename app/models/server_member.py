@@ -18,6 +18,6 @@ class ServerMember(Base):
         PG_UUID(as_uuid=True), ForeignKey("servers.id", ondelete="CASCADE"), nullable=False, index=True
     )
     # user_id points to auth_db.users, a different service's database (Database-per-Service) — no FK.
-    user_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     nickname: Mapped[str | None] = mapped_column(String(100), nullable=True)
     joined_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
