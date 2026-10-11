@@ -1,15 +1,19 @@
+from __future__ import annotations
+
 import uuid
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.repositories.category import CategoryRepository
 from app.repositories.channel import ChannelRepository
 from app.schemas.channel import ChannelCreate, ChannelUpdate
 
 
 class ChannelService:
-    def __init__(self, repo: ChannelRepository):
+    def __init__(self, repo: ChannelRepository, category_repo: CategoryRepository | None = None):
         self.repo = repo
+        self.category_repo = category_repo or CategoryRepository()
 
     async def create_channel(
         self, db: AsyncSession, server_id: uuid.UUID, user_id: str, channel_data: ChannelCreate
@@ -20,6 +24,14 @@ class ChannelService:
                 status_code=403, 
                 detail="You do not have permissions to create channels in this server."
             )
+
+        if channel_data.category_id is not None:
+            category = await self.category_repo.get_category_by_id(db, server_id, channel_data.category_id)
+            if not category:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Category not found."
+                )
 
         existing_channel = await self.repo.get_channel_by_name_and_category(
             db, server_id, channel_data.name, channel_data.category_id
@@ -74,11 +86,22 @@ class ChannelService:
         if not update_data:
             return channel
 
-        if "name" in update_data and update_data["name"] != channel.name:
+        target_name = update_data.get("name", channel.name)
+        target_category_id = update_data.get("category_id", channel.category_id)
+
+        if "category_id" in update_data and update_data["category_id"] is not None:
+            category = await self.category_repo.get_category_by_id(db, server_id, update_data["category_id"])
+            if not category:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Category not found."
+                )
+
+        if target_name != channel.name or target_category_id != channel.category_id:
             existing_channel = await self.repo.get_channel_by_name_and_category(
-                db, server_id, update_data["name"], channel.category_id
+                db, server_id, target_name, target_category_id
             )
-            if existing_channel:
+            if existing_channel and existing_channel.id != channel.id:
                 raise HTTPException(
                     status_code=400, 
                     detail="A channel with that name already exists in this category."

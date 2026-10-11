@@ -50,7 +50,7 @@ class ServerRepository:
         db.add(RoleAssignment(server_member_id=owner_member.id, role_id=default_role.id))
 
         await db.commit()
-        await db.refresh(server, attribute_names=["channels"])
+        await db.refresh(server, attribute_names=["channels", "categories"])
         return server
 
     async def get_server_by_id(self, db: AsyncSession, server_id: uuid.UUID) -> Server | None:
