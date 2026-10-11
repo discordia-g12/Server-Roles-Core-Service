@@ -10,6 +10,7 @@ from sqlalchemy.sql import func
 from app.db.base import Base
 
 if TYPE_CHECKING:
+    from app.models.category import Category
     from app.models.channel import Channel
 
 
@@ -26,4 +27,7 @@ class Server(Base):
 
     channels: Mapped[list["Channel"]] = relationship(
         "Channel", lazy="selectin", order_by="Channel.position", viewonly=False
+    )
+    categories: Mapped[list["Category"]] = relationship(
+        "Category", lazy="selectin", order_by="Category.position", viewonly=False
     )
