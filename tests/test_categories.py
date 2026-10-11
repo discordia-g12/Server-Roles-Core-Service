@@ -85,7 +85,7 @@ def test_create_category_fails_with_duplicate_name():
     assert "detail" in res2.json()
 
 
-@pytest.mark.parametrize("invalid_name", ["", "A" * 101])
+@pytest.mark.parametrize("invalid_name", ["", "   ", "A" * 101, "bad\x00name"])
 def test_create_category_fails_with_invalid_name(invalid_name):
     """
     CA 1: Validating category name lenght.
@@ -118,6 +118,74 @@ def test_get_categories():
     category_names = [c["name"] for c in categories]
     assert "CAT 1" in category_names
     assert "CAT 2" in category_names
+
+
+def test_get_categories_forbidden_for_non_member():
+    """
+    Only server members can see its categories.
+    """
+    owner_id = str(uuid.uuid4())
+    server_id = create_test_server(owner_id)
+    client.post(
+        f"/api/v1/servers/{server_id}/categories", json={"name": "PRIVATE"}, headers={"x-user-id": owner_id}
+    )
+
+    response = client.get(f"/api/v1/servers/{server_id}/categories", headers={"x-user-id": str(uuid.uuid4())})
+
+    assert response.status_code == 403
+
+
+def test_get_categories_of_nonexistent_server():
+    response = client.get(f"/api/v1/servers/{uuid.uuid4()}/categories", headers={"x-user-id": str(uuid.uuid4())})
+
+    assert response.status_code == 404
+
+
+def test_create_category_strips_surrounding_whitespace():
+    owner_id = str(uuid.uuid4())
+    server_id = create_test_server(owner_id)
+
+    response = client.post(
+        f"/api/v1/servers/{server_id}/categories", json={"name": "  MUSIC  "}, headers={"x-user-id": owner_id}
+    )
+
+    assert response.status_code == 201
+    assert response.json()["name"] == "MUSIC"
+
+
+@pytest.mark.parametrize("invalid_position", [-1, 2_147_483_648])
+def test_create_category_fails_with_out_of_range_position(invalid_position):
+    owner_id = str(uuid.uuid4())
+    server_id = create_test_server(owner_id)
+
+    response = client.post(
+        f"/api/v1/servers/{server_id}/categories",
+        json={"name": "OUT OF RANGE", "position": invalid_position},
+        headers={"x-user-id": owner_id},
+    )
+
+    assert response.status_code == 422
+
+
+def test_move_channel_without_permissions_fails():
+    """
+    CA 2: Only users with permissions can move a channel to a category.
+    """
+    owner_id = str(uuid.uuid4())
+    server_id = create_test_server(owner_id)
+    headers = {"x-user-id": owner_id}
+    category_id = client.post(
+        f"/api/v1/servers/{server_id}/categories", json={"name": "TARGET"}, headers=headers
+    ).json()["id"]
+    channel_id = create_test_channel(server_id, owner_id, name="general-move")
+
+    response = client.patch(
+        f"/api/v1/servers/{server_id}/channels/{channel_id}",
+        json={"category_id": category_id},
+        headers={"x-user-id": str(uuid.uuid4())},
+    )
+
+    assert response.status_code == 403
 
 
 def test_move_channel_to_category_success():

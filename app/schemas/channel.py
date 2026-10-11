@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.category import Position
+
 
 class ChannelCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
@@ -15,7 +17,7 @@ class ChannelUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     topic: str | None = Field(None, max_length=1024)
     category_id: UUID | None = None
-    position: int | None = None
+    position: Position | None = None
 
 
 class ChannelResponse(BaseModel):
