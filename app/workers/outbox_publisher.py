@@ -20,7 +20,7 @@ logger = logging.getLogger("outbox_publisher")
 
 POLL_INTERVAL_SECONDS = 2
 BATCH_SIZE = 50
-HEARTBEAT = Path("/tmp/outbox-heartbeat") 
+HEARTBEAT = Path("/tmp/outbox-heartbeat")  # nosec B108 # archivo de liveness dentro del contenedor
 
 PENDING = "PENDING"
 PUBLISHED = "PUBLISHED"
