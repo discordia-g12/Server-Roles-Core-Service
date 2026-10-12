@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.schemas.category import Position
+from app.schemas.category import MAX_REORDER_ITEMS
 
 
 class ChannelCreate(BaseModel):
@@ -17,7 +17,22 @@ class ChannelUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     topic: str | None = Field(None, max_length=1024)
     category_id: UUID | None = None
-    position: Position | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ChannelOrderItem(BaseModel):
+    id: UUID
+    category_id: UUID | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ChannelReorder(BaseModel):
+
+    channels: list[ChannelOrderItem] = Field(..., min_length=1, max_length=MAX_REORDER_ITEMS)
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class ChannelResponse(BaseModel):

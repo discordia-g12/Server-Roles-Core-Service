@@ -24,6 +24,11 @@ class ChannelRepository:
         result = await db.execute(query)
         return result.scalar_one_or_none()
 
+    async def get_channels_by_server(self, db: AsyncSession, server_id: uuid.UUID) -> list[Channel]:
+        query = select(Channel).where(Channel.server_id == server_id).order_by(Channel.position.asc())
+        result = await db.execute(query)
+        return list(result.scalars().all())
+
     async def get_next_position(self, db: AsyncSession, server_id: uuid.UUID) -> int:
         query = select(func.max(Channel.position)).where(Channel.server_id == server_id)
         result = await db.execute(query)
@@ -84,6 +89,15 @@ class ChannelRepository:
         )
         result = await db.execute(query)
         return result.scalar_one_or_none()
+
+    async def reorder_channels(
+        self, db: AsyncSession, ordered: list[tuple[Channel, uuid.UUID | None]]
+    ) -> list[Channel]:
+        for position, (channel, category_id) in enumerate(ordered):
+            channel.position = position
+            channel.category_id = category_id
+        await db.commit()
+        return [channel for channel, _ in ordered]
 
     async def delete_channel(self, db: AsyncSession, channel: Channel) -> None:
         event = OutboxEvent(

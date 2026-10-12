@@ -153,14 +153,41 @@ def test_create_category_strips_surrounding_whitespace():
     assert response.json()["name"] == "MUSIC"
 
 
-@pytest.mark.parametrize("invalid_position", [-1, 2_147_483_648])
-def test_create_category_fails_with_out_of_range_position(invalid_position):
+def test_create_category_rejects_position():
+    """
+    The position is assigned by the server (at the end); it only changes through the reorder endpoint.
+    """
     owner_id = str(uuid.uuid4())
     server_id = create_test_server(owner_id)
 
     response = client.post(
         f"/api/v1/servers/{server_id}/categories",
-        json={"name": "OUT OF RANGE", "position": invalid_position},
+        json={"name": "FIRST", "position": 0},
+        headers={"x-user-id": owner_id},
+    )
+
+    assert response.status_code == 422
+
+
+def test_create_category_is_appended_at_the_end():
+    owner_id = str(uuid.uuid4())
+    server_id = create_test_server(owner_id)
+    headers = {"x-user-id": owner_id}
+
+    first = client.post(f"/api/v1/servers/{server_id}/categories", json={"name": "A"}, headers=headers).json()
+    second = client.post(f"/api/v1/servers/{server_id}/categories", json={"name": "B"}, headers=headers).json()
+
+    assert second["position"] == first["position"] + 1
+
+
+def test_update_channel_rejects_position():
+    owner_id = str(uuid.uuid4())
+    server_id = create_test_server(owner_id)
+    channel_id = create_test_channel(server_id, owner_id, name="no-position")
+
+    response = client.patch(
+        f"/api/v1/servers/{server_id}/channels/{channel_id}",
+        json={"position": 0},
         headers={"x-user-id": owner_id},
     )
 

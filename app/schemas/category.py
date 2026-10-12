@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
-MAX_POSITION = 2_147_483_647
+MAX_REORDER_ITEMS = 500
 
 
 def _reject_blank(value: str) -> str:
@@ -18,17 +18,23 @@ def _reject_blank(value: str) -> str:
 CategoryName = Annotated[
     str, Field(min_length=1, max_length=100, pattern=r"^[^\x00]+$"), AfterValidator(_reject_blank)
 ]
-Position = Annotated[int, Field(ge=0, le=MAX_POSITION)]
-
 
 class CategoryCreate(BaseModel):
     name: CategoryName
-    position: Position | None = None
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class CategoryUpdate(BaseModel):
     name: CategoryName | None = None
-    position: Position | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class CategoryReorder(BaseModel):
+    category_ids: list[UUID] = Field(..., min_length=1, max_length=MAX_REORDER_ITEMS)
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class CategoryResponse(BaseModel):

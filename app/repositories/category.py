@@ -42,11 +42,8 @@ class CategoryRepository:
         max_pos = result.scalar()
         return (max_pos + 1) if max_pos is not None else 0
 
-    async def create_category(
-        self, db: AsyncSession, server_id: uuid.UUID, name: str, position: int | None = None
-    ) -> Category:
-        if position is None:
-            position = await self.get_next_position(db, server_id)
+    async def create_category(self, db: AsyncSession, server_id: uuid.UUID, name: str) -> Category:
+        position = await self.get_next_position(db, server_id)
         category = Category(server_id=server_id, name=name, position=position)
         db.add(category)
         await db.commit()
@@ -59,6 +56,12 @@ class CategoryRepository:
         await db.commit()
         await db.refresh(category)
         return category
+
+    async def reorder_categories(self, db: AsyncSession, ordered: list[Category]) -> list[Category]:
+        for position, category in enumerate(ordered):
+            category.position = position
+        await db.commit()
+        return ordered
 
     async def delete_category(self, db: AsyncSession, category: Category) -> None:
         await db.delete(category)

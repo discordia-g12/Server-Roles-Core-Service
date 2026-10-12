@@ -10,8 +10,8 @@ from app.repositories.channel import ChannelRepository
 from app.repositories.invite import InviteRepository
 from app.repositories.role import RoleRepository
 from app.repositories.server import ServerRepository
-from app.schemas.category import CategoryCreate, CategoryResponse
-from app.schemas.channel import ChannelCreate, ChannelResponse, ChannelUpdate
+from app.schemas.category import CategoryCreate, CategoryReorder, CategoryResponse
+from app.schemas.channel import ChannelCreate, ChannelReorder, ChannelResponse, ChannelUpdate
 from app.schemas.invite import InviteCreate, InviteResponse
 from app.schemas.role import RoleCreate, RoleMemberResponse, RoleResponse, RoleUpdate, RoleUpdatePermissions
 from app.schemas.server import ServerCreate, ServerMemberPage, ServerResponse
@@ -97,6 +97,17 @@ async def update_channel_endpoint(
     return await service.update_channel(db, server_id, user_id, channel_id, channel_data)
 
 
+@router.put("/servers/{server_id}/channels/order", response_model=list[ChannelResponse], status_code=200)
+async def reorder_channels_endpoint(
+    server_id: uuid.UUID,
+    reorder: ChannelReorder,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = ChannelService(ChannelRepository())
+    return await service.reorder_channels(db, server_id, user_id, reorder)
+
+
 @router.post("/servers/{server_id}/categories", response_model=CategoryResponse, status_code=201)
 async def create_category_endpoint(
     server_id: uuid.UUID,
@@ -127,6 +138,17 @@ async def delete_category_endpoint(
 ):
     service = CategoryService(CategoryRepository())
     await service.delete_category(db, server_id, user_id, category_id)
+
+
+@router.put("/servers/{server_id}/categories/order", response_model=list[CategoryResponse], status_code=200)
+async def reorder_categories_endpoint(
+    server_id: uuid.UUID,
+    reorder: CategoryReorder,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = CategoryService(CategoryRepository())
+    return await service.reorder_categories(db, server_id, user_id, reorder)
 
 
 @router.get("/servers/{server_id}/roles", response_model=list[RoleResponse], status_code=200)
