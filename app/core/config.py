@@ -1,4 +1,5 @@
 from functools import lru_cache
+from urllib.parse import quote
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy import URL
@@ -14,6 +15,12 @@ class Settings(BaseSettings):
     database_name: str
     database_user: str
     database_password: str
+
+    rabbitmq_host: str = "rabbitmq"
+    rabbitmq_port: int = 5672
+    rabbitmq_user: str = "admin"
+    rabbitmq_password: str = "admin"
+    rabbitmq_exchange: str = "server.events"
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -32,6 +39,13 @@ class Settings(BaseSettings):
             port=self.database_port,
             database=self.database_name,
         ).render_as_string(hide_password=False)
+
+    @property
+    def rabbitmq_url(self) -> str:
+        """AMQP URL for the default vhost. Credentials are percent-encoded, like in database_url."""
+        user = quote(self.rabbitmq_user, safe="")
+        password = quote(self.rabbitmq_password, safe="")
+        return f"amqp://{user}:{password}@{self.rabbitmq_host}:{self.rabbitmq_port}/"
 
 
 @lru_cache

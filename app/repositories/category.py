@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.category import Category
+from app.repositories.outbox import add_outbox_event
 
 
 class CategoryRepository:
@@ -46,6 +47,8 @@ class CategoryRepository:
         position = await self.get_next_position(db, server_id)
         category = Category(server_id=server_id, name=name, position=position)
         db.add(category)
+        await db.flush() 
+        add_outbox_event(db, "category.created", {"server_id": str(server_id), "category_id": str(category.id)})
         await db.commit()
         await db.refresh(category)
         return category
@@ -53,6 +56,9 @@ class CategoryRepository:
     async def update_category(self, db: AsyncSession, category: Category, update_data: dict) -> Category:
         for key, value in update_data.items():
             setattr(category, key, value)
+        add_outbox_event(
+            db, "category.updated", {"server_id": str(category.server_id), "category_id": str(category.id)}
+        )
         await db.commit()
         await db.refresh(category)
         return category
@@ -60,9 +66,14 @@ class CategoryRepository:
     async def reorder_categories(self, db: AsyncSession, ordered: list[Category]) -> list[Category]:
         for position, category in enumerate(ordered):
             category.position = position
+        if ordered:
+            add_outbox_event(db, "categories.reordered", {"server_id": str(ordered[0].server_id)})
         await db.commit()
         return ordered
 
     async def delete_category(self, db: AsyncSession, category: Category) -> None:
+        add_outbox_event(
+            db, "category.deleted", {"server_id": str(category.server_id), "category_id": str(category.id)}
+        )
         await db.delete(category)
         await db.commit()
