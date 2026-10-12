@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.category import CategoryRepository
 from app.repositories.channel import ChannelRepository
 from app.repositories.server import ServerRepository
-from app.schemas.category import CategoryCreate
+from app.schemas.category import CategoryCreate, CategoryReorder
 
 
 class CategoryService:
@@ -39,9 +39,29 @@ class CategoryService:
                 detail="A category with that name already exists in this server."
             )
 
-        return await self.repo.create_category(
-            db, server_id, category_data.name, category_data.position
-        )
+        return await self.repo.create_category(db, server_id, category_data.name)
+
+    async def reorder_categories(
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, reorder: CategoryReorder
+    ):
+        has_permission = await self.channel_repo.check_user_can_manage_channels(db, server_id, user_id)
+        if not has_permission:
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have permissions to reorder categories in this server."
+            )
+
+        categories = await self.repo.get_categories_by_server(db, server_id)
+        categories_by_id = {category.id: category for category in categories}
+        requested_ids = reorder.category_ids
+
+        if len(set(requested_ids)) != len(requested_ids) or set(requested_ids) != categories_by_id.keys():
+            raise HTTPException(
+                status_code=400,
+                detail="The order must include every category of the server exactly once."
+            )
+
+        return await self.repo.reorder_categories(db, [categories_by_id[cid] for cid in requested_ids])
 
     async def get_categories(
         self, db: AsyncSession, server_id: uuid.UUID, user_id: str

@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.category import CategoryRepository
 from app.repositories.channel import ChannelRepository
-from app.schemas.channel import ChannelCreate, ChannelUpdate
+from app.schemas.channel import ChannelCreate, ChannelReorder, ChannelUpdate
 
 
 class ChannelService:
@@ -64,6 +64,43 @@ class ChannelService:
             )
 
         await self.repo.delete_channel(db, channel)
+
+    async def reorder_channels(
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, reorder: ChannelReorder
+    ):
+        has_permission = await self.repo.check_user_can_manage_channels(db, server_id, user_id)
+        if not has_permission:
+            raise HTTPException(
+                status_code=403,
+                detail="You do not have permissions to reorder channels in this server."
+            )
+
+        channels = await self.repo.get_channels_by_server(db, server_id)
+        channels_by_id = {channel.id: channel for channel in channels}
+        requested_ids = [item.id for item in reorder.channels]
+
+        if len(set(requested_ids)) != len(requested_ids) or set(requested_ids) != channels_by_id.keys():
+            raise HTTPException(
+                status_code=400,
+                detail="The order must include every channel of the server exactly once."
+            )
+
+        target_category_ids = {item.category_id for item in reorder.channels if item.category_id is not None}
+        if target_category_ids:
+            categories = await self.category_repo.get_categories_by_server(db, server_id)
+            if not target_category_ids <= {category.id for category in categories}:
+                raise HTTPException(status_code=404, detail="Category not found.")
+
+        placements = [(channels_by_id[item.id].name, item.category_id) for item in reorder.channels]
+        if len(set(placements)) != len(placements):
+            raise HTTPException(
+                status_code=400,
+                detail="A channel with that name already exists in this category."
+            )
+
+        return await self.repo.reorder_channels(
+            db, [(channels_by_id[item.id], item.category_id) for item in reorder.channels]
+        )
 
     async def update_channel(
         self, db: AsyncSession, server_id: uuid.UUID, user_id: str, channel_id: uuid.UUID, channel_data: ChannelUpdate

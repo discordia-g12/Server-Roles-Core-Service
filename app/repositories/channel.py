@@ -5,11 +5,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import Permission
 from app.models.channel import Channel
-from app.models.outbox_event import OutboxEvent
 from app.models.role import Role
 from app.models.role_assignment import RoleAssignment
 from app.models.server import Server
 from app.models.server_member import ServerMember
+from app.repositories.outbox import add_outbox_event
 
 
 class ChannelRepository:
@@ -23,6 +23,11 @@ class ChannelRepository:
         )
         result = await db.execute(query)
         return result.scalar_one_or_none()
+
+    async def get_channels_by_server(self, db: AsyncSession, server_id: uuid.UUID) -> list[Channel]:
+        query = select(Channel).where(Channel.server_id == server_id).order_by(Channel.position.asc())
+        result = await db.execute(query)
+        return list(result.scalars().all())
 
     async def get_next_position(self, db: AsyncSession, server_id: uuid.UUID) -> int:
         query = select(func.max(Channel.position)).where(Channel.server_id == server_id)
@@ -42,6 +47,8 @@ class ChannelRepository:
             position=position
         )
         db.add(channel)
+        await db.flush()
+        add_outbox_event(db, "channel.created", {"server_id": str(server_id), "channel_id": str(channel.id)})
         await db.commit()
         await db.refresh(channel)
         return channel
@@ -85,12 +92,21 @@ class ChannelRepository:
         result = await db.execute(query)
         return result.scalar_one_or_none()
 
+    async def reorder_channels(
+        self, db: AsyncSession, ordered: list[tuple[Channel, uuid.UUID | None]]
+    ) -> list[Channel]:
+        for position, (channel, category_id) in enumerate(ordered):
+            channel.position = position
+            channel.category_id = category_id
+        if ordered:
+            add_outbox_event(db, "channels.reordered", {"server_id": str(ordered[0][0].server_id)})
+        await db.commit()
+        return [channel for channel, _ in ordered]
+
     async def delete_channel(self, db: AsyncSession, channel: Channel) -> None:
-        event = OutboxEvent(
-            routing_key="channel.deleted",
-            payload={"channel_id": str(channel.id), "server_id": str(channel.server_id)}
+        add_outbox_event(
+            db, "channel.deleted", {"channel_id": str(channel.id), "server_id": str(channel.server_id)}
         )
-        db.add(event)
         await db.delete(channel)
         await db.commit()
 
@@ -99,6 +115,9 @@ class ChannelRepository:
     ) -> Channel:
         for key, value in update_data.items():
             setattr(channel, key, value)
+        add_outbox_event(
+            db, "channel.updated", {"server_id": str(channel.server_id), "channel_id": str(channel.id)}
+        )
         await db.commit()
         await db.refresh(channel)
         return channel

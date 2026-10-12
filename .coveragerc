@@ -1,0 +1,5 @@
+# SQLAlchemy async corre el código en greenlets y TestClient en otro thread: sin esto coverage
+# no registra esas líneas y reporta de menos (mismo ajuste que Auth-User-Service en pyproject.toml).
+[run]
+source = app
+concurrency = greenlet, thread
