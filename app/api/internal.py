@@ -59,7 +59,7 @@ async def can_send_message(
         
     server = await db.scalar(select(Server).where(Server.id == server_id))
     if server.owner_id == user_id:
-        return {"can_send": True}
+        return {"can_send": True, "server_id": str(server_id)}
         
     roles = await db.execute(
         select(Role)
@@ -75,7 +75,7 @@ async def can_send_message(
         role_ids.append(role.id)
         
     if (base_permissions & Permission.ADMINISTRATOR.value) != 0:
-        return {"can_send": True}
+        return {"can_send": True, "server_id": str(server_id)}
         
     conditions = [ChannelPermissionOverride.server_member_id == member.id]
     if role_ids:
@@ -109,7 +109,7 @@ async def can_send_message(
     if (effective & Permission.SEND_MESSAGES.value) == 0:
         raise HTTPException(status_code=403, detail="User does not have permission to send messages in this channel")
         
-    return {"can_send": True}
+    return {"can_send": True, "server_id": str(server_id)}
 
 
 @router.get("/channels/{channel_id}/can-connect", status_code=200)
@@ -143,7 +143,7 @@ async def can_connect(
 
     server = await db.scalar(select(Server).where(Server.id == server_id))
     if server.owner_id == user_id:
-        return {"can_connect": True}
+        return {"can_connect": True, "server_id": str(server_id)}
         
     roles = await db.execute(
         select(Role)
@@ -159,7 +159,7 @@ async def can_connect(
         role_ids.append(role.id)
         
     if (base_permissions & Permission.ADMINISTRATOR.value) != 0:
-        return {"can_connect": True}
+        return {"can_connect": True, "server_id": str(server_id)}
         
     conditions = [ChannelPermissionOverride.server_member_id == member.id]
     if role_ids:
@@ -192,4 +192,4 @@ async def can_connect(
     if (effective & Permission.CONNECT.value) == 0:
         raise HTTPException(status_code=403, detail="User does not have permission to connect to this voice channel")
         
-    return {"can_connect": True}
+    return {"can_connect": True, "server_id": str(server_id)}

@@ -33,7 +33,8 @@ def test_can_connect_success():
     response = client.get(f"/internal/channels/{channel_id}/can-connect?user_id={owner_id}")
     
     assert response.status_code == 200
-    assert response.json() == {"can_connect": True}
+    assert response.json()["can_connect"] is True
+    assert response.json()["server_id"] == server_id
 
 
 def test_can_connect_channel_not_found():

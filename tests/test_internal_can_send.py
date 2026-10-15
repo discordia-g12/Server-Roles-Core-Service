@@ -33,7 +33,8 @@ def test_can_send_success():
     response = client.get(f"/internal/channels/{channel_id}/can-send?user_id={owner_id}")
     
     assert response.status_code == 200
-    assert response.json() == {"can_send": True}
+    assert response.json()["can_send"] is True
+    assert response.json()["server_id"] == server_id
 
 
 def test_can_send_channel_not_found():

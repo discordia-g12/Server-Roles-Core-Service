@@ -9,6 +9,7 @@ from app.models.role import Role
 from app.models.role_assignment import RoleAssignment
 from app.models.server import Server
 from app.models.server_member import ServerMember
+from app.repositories.outbox import add_outbox_event
 
 
 class ServerRepository:
@@ -65,6 +66,7 @@ class ServerRepository:
         return result.scalars().first()
     
     async def remove_member(self, db: AsyncSession, member: ServerMember) -> None:
+        add_outbox_event(db, "member.left", {"server_id": str(member.server_id), "user_id": member.user_id})
         await db.delete(member)
         await db.commit()
 
