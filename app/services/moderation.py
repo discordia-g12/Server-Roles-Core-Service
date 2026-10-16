@@ -3,6 +3,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import Permission
@@ -51,6 +52,23 @@ class ModerationService:
             detail=f"Missing required permission: {required_permission.name}",
         )
 
+    async def _require_outranks(
+        self, db: AsyncSession, server: Server, user_id: str, target_user_id: str, action: str
+    ) -> None:
+        if server.owner_id == user_id:
+            return
+
+        target_rank = await self.repo.get_highest_role_position(db, server.id, target_user_id)
+        if target_rank is None:
+            return
+
+        actor_rank = await self.repo.get_highest_role_position(db, server.id, user_id)
+        if actor_rank is None or actor_rank <= target_rank:
+            raise HTTPException(
+                status_code=403,
+                detail=f"You cannot {action} a member whose highest role is equal to or higher than yours.",
+            )
+
     async def ban_member(
         self,
         db: AsyncSession,
@@ -60,13 +78,24 @@ class ModerationService:
         reason: str | None = None,
     ):
         server = await self._get_server(db, server_id)
+
+        await self._require_permission(db, server, user_id, Permission.BAN_MEMBERS)
+
         if target_user_id == server.owner_id:
             raise HTTPException(status_code=400, detail="Cannot ban the server owner")
         if target_user_id == user_id:
             raise HTTPException(status_code=400, detail="Cannot ban yourself")
 
-        await self._require_permission(db, server, user_id, Permission.BAN_MEMBERS)
-        return await self.repo.create_ban(db, server_id, target_user_id, banned_by=user_id, reason=reason)
+        await self._require_outranks(db, server, user_id, target_user_id, action="ban")
+
+        if await self.repo.get_ban(db, server_id, target_user_id):
+            raise HTTPException(status_code=409, detail="User is already banned from this server")
+
+        try:
+            return await self.repo.create_ban(db, server_id, target_user_id, banned_by=user_id, reason=reason)
+        except IntegrityError:
+            await db.rollback()
+            raise HTTPException(status_code=409, detail="User is already banned from this server") from None
 
     async def unban_member(
         self,
