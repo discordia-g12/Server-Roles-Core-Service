@@ -1,12 +1,12 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BanCreate(BaseModel):
-    user_id: str
-    reason: str | None = None
+    user_id: str = Field(..., min_length=1, max_length=255, pattern=r"^[^\x00]+$")
+    reason: str | None = Field(None, max_length=500, pattern=r"^[^\x00]*$")
 
 
 class BanResponse(BaseModel):

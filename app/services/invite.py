@@ -163,12 +163,12 @@ class InviteService:
         Returns:
             uuid.UUID: The ID of the server joined.
         """
-        invite = await self.validate_and_use_invite(db, code)
-        
-        is_banned = await self.repository.is_user_banned(db, invite.server_id, user_id)
-        if is_banned:
+        invite_preview = await self.repository.get_invite_by_code(db, code)
+        if invite_preview and await self.repository.is_user_banned(db, invite_preview.server_id, user_id):
             raise HTTPException(status_code=403, detail="You are banned from this server.")
-        
+
+        invite = await self.validate_and_use_invite(db, code)
+
         existing = await self.repository.get_server_member(db, invite.server_id, user_id)
         if existing:
             return invite.server_id
