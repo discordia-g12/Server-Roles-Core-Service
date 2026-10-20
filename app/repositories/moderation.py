@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.role import Role
@@ -73,11 +73,14 @@ class ModerationRepository:
         return ban
 
     async def remove_ban(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> bool:
-        ban = await self.get_ban(db, server_id, user_id)
-        if not ban:
+        removed_id = await db.scalar(
+            delete(ServerBan)
+            .where(ServerBan.server_id == server_id, ServerBan.user_id == user_id)
+            .returning(ServerBan.id)
+        )
+        if removed_id is None:
             return False
 
-        await db.delete(ban)
         add_outbox_event(
             db,
             "member.unbanned",
