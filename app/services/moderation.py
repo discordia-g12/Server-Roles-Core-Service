@@ -105,6 +105,7 @@ class ModerationService:
         target_user_id: str,
     ):
         server = await self._get_server(db, server_id)
+        # Permission is checked before looking up the ban so unprivileged users can't probe who is banned.
         await self._require_permission(db, server, user_id, Permission.BAN_MEMBERS)
         removed = await self.repo.remove_ban(db, server_id, target_user_id)
         if not removed:
