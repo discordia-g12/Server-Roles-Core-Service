@@ -147,7 +147,7 @@ class InviteService:
             "server_id": invite.server_id,
             "server_name": server.name,
             "server_description": getattr(server, 'description', None),
-            "server_icon": getattr(server, 'icon', None),
+            "server_icon": server.icon_url,
             "member_count": member_count or 0
         }
 

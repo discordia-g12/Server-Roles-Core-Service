@@ -85,3 +85,21 @@ def setup_database():
 @pytest.fixture
 def anyio_backend():
     return 'asyncio'
+
+
+@pytest.fixture(autouse=True)
+def fake_storage(monkeypatch):
+    """Ningún test le pega a S3: las subidas devuelven una URL fake y se registran acá."""
+    calls = {"uploaded": [], "deleted": []}
+
+    def fake_upload(contents: bytes, prefix: str, content_type: str = "image/webp") -> str:
+        url = f"https://fake-bucket.s3.amazonaws.com/{prefix}/{len(calls['uploaded'])}.webp"
+        calls["uploaded"].append({"url": url, "contents": contents, "prefix": prefix})
+        return url
+
+    def fake_delete(url: str | None) -> None:
+        calls["deleted"].append(url)
+
+    monkeypatch.setattr("app.services.storage.upload_image", fake_upload)
+    monkeypatch.setattr("app.services.storage.delete_image", fake_delete)
+    return calls

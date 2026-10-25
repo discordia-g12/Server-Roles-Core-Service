@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     rabbitmq_password: str = "admin"
     rabbitmq_exchange: str = "server.events"
 
+    # Íconos de servidor (S3). Las claves son las del usuario IAM propio del servicio: no se usa el
+    # rol ni la metadata de la EC2, así el servicio anda igual en cualquier nodo.
+    aws_region: str = "us-east-1"
+    s3_bucket: str = ""
+    s3_public_base_url: str = ""  # vacío: https://<bucket>.s3.<region>.amazonaws.com
+    aws_access_key_id: str = ""
+    aws_secret_access_key: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
