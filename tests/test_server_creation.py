@@ -1,12 +1,23 @@
+import io
 import uuid
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
+from app.exceptions import StorageUnavailableError
 from app.main import app
 
 client = TestClient(app)
 fake_headers = {"x-user-id": str(uuid.uuid4())}
+
+
+def _image_bytes(fmt: str = "PNG", size: tuple[int, int] = (64, 32)) -> bytes:
+    """Imagen válida generada en memoria."""
+    buffer = io.BytesIO()
+    Image.new("RGB", size, color="blue").save(buffer, format=fmt)
+    return buffer.getvalue()
+
 def test_create_server_success_generates_default_channels():
     """
     Given a user provides a valid server name and confirms creation,
@@ -40,12 +51,112 @@ def test_create_server_success_with_valid_icon():
     Then the server is created successfully.
     """
     payload = {"name": "Community Hub"}
-    files = {"icon": ("icon.png", b"fake_png_bytes", "image/png")}
-    
+    files = {"icon": ("icon.png", _image_bytes("PNG"), "image/png")}
+
     response = client.post("/api/v1/servers", data=payload, files=files, headers=fake_headers)
-    
+
     assert response.status_code == 201
     assert response.json()["name"] == "Community Hub"
+
+
+@pytest.mark.parametrize("fmt, content_type", [("PNG", "image/png"), ("JPEG", "image/jpeg"), ("WEBP", "image/webp")])
+def test_create_server_stores_icon_and_returns_url(fake_storage, fmt, content_type):
+    """
+    Given a valid JPEG, PNG or WebP icon,
+    When the server is created,
+    Then the icon is uploaded as a 256x256 WebP under server-icons/ and its URL is saved.
+    """
+    files = {"icon": (f"icon.{fmt.lower()}", _image_bytes(fmt), content_type)}
+
+    response = client.post("/api/v1/servers", data={"name": "Icon Server"}, files=files, headers=fake_headers)
+
+    assert response.status_code == 201
+    upload = fake_storage["uploaded"][-1]
+    assert upload["prefix"] == "server-icons"
+    assert response.json()["icon_url"] == upload["url"]
+
+    stored = Image.open(io.BytesIO(upload["contents"]))
+    assert stored.format == "WEBP"
+    assert stored.size == (256, 256)
+
+
+def test_create_server_without_icon_does_not_upload(fake_storage):
+    response = client.post("/api/v1/servers", data={"name": "No Icon"}, headers=fake_headers)
+
+    assert response.status_code == 201
+    assert response.json()["icon_url"] is None
+    assert fake_storage["uploaded"] == []
+
+
+def test_create_server_rejects_fake_image_with_image_content_type(fake_storage):
+    """
+    Given a file that claims to be a PNG but is not an image,
+    When the server is created,
+    Then it is rejected: the real content is checked, not the Content-Type.
+    """
+    files = {"icon": ("icon.png", b"fake_png_bytes", "image/png")}
+
+    response = client.post("/api/v1/servers", data={"name": "Spoofed"}, files=files, headers=fake_headers)
+
+    assert response.status_code == 400
+    assert "Use JPEG, PNG or WebP" in response.json()["detail"]
+    assert fake_storage["uploaded"] == []
+
+
+def test_create_server_rejects_gif_even_if_valid_image():
+    files = {"icon": ("icon.gif", _image_bytes("GIF"), "image/gif")}
+
+    response = client.post("/api/v1/servers", data={"name": "Gif Server"}, files=files, headers=fake_headers)
+
+    assert response.status_code == 400
+    assert "Use JPEG, PNG or WebP" in response.json()["detail"]
+
+
+def test_create_server_rejects_huge_dimensions(monkeypatch):
+    from app.services import image
+
+    monkeypatch.setattr(image, "MAX_PIXELS", 100)  # 64x32 supera el límite
+    files = {"icon": ("icon.png", _image_bytes("PNG"), "image/png")}
+
+    response = client.post("/api/v1/servers", data={"name": "Huge"}, files=files, headers=fake_headers)
+
+    assert response.status_code == 400
+    assert "pixels" in response.json()["detail"]
+
+
+def test_create_server_fails_and_creates_nothing_when_storage_is_down(monkeypatch):
+    """
+    Given S3 is unavailable,
+    When a server with an icon is created,
+    Then the request fails with 503 and no server is created.
+    """
+    def broken_upload(*args, **kwargs):
+        raise StorageUnavailableError()
+
+    monkeypatch.setattr("app.services.storage.upload_image", broken_upload)
+    headers = {"x-user-id": str(uuid.uuid4())}
+    files = {"icon": ("icon.png", _image_bytes("PNG"), "image/png")}
+
+    response = client.post("/api/v1/servers", data={"name": "Down"}, files=files, headers=headers)
+
+    assert response.status_code == 503
+    assert client.get("/api/v1/servers", headers=headers).json() == []
+
+
+def test_create_server_deletes_uploaded_icon_when_db_fails(fake_storage, monkeypatch):
+    """Si la base falla después de subir el ícono, el ícono se borra para no dejarlo huérfano."""
+    from app.repositories.server import ServerRepository
+
+    async def broken_create(*args, **kwargs):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(ServerRepository, "create_server_with_defaults", broken_create)
+    files = {"icon": ("icon.png", _image_bytes("PNG"), "image/png")}
+
+    with pytest.raises(RuntimeError):
+        client.post("/api/v1/servers", data={"name": "Db Down"}, files=files, headers=fake_headers)
+
+    assert fake_storage["deleted"] == [fake_storage["uploaded"][-1]["url"]]
 @pytest.mark.parametrize("invalid_name", [
     "",             
     "A" * 101,     

@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 
 from fastapi import HTTPException, UploadFile
@@ -5,9 +6,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import BadRequestError, ServerNotFoundError
 from app.repositories.server import ServerRepository
+from app.services import storage
+from app.services.image import normalize_image
 
-MAX_FILE_SIZE = 5 * 1024 * 1024
-VALID_ICON_TYPES = {"image/jpeg", "image/png", "image/webp"}
+ICONS_PREFIX = "server-icons"
 
 
 class ServerService:
@@ -26,16 +28,16 @@ class ServerService:
     ):
         icon_url = None
         if icon is not None:
-            if icon.content_type not in VALID_ICON_TYPES:
-                raise HTTPException(400, "Unsupported format. Use JPEG, PNG or WebP.")
+            # El ícono se sube antes de crear el servidor: si S3 falla, no queda un servidor a medias
+            image = normalize_image(await icon.read())
+            icon_url = await asyncio.to_thread(storage.upload_image, image, ICONS_PREFIX)
 
-            file_bytes = await icon.read()
-            if len(file_bytes) > MAX_FILE_SIZE:
-                raise HTTPException(400, "File too large. Limit 5MB.")
-
-            # icon_url = await s3_provider.upload(file_bytes)  # TODO: definir storage
-
-        return await self.repo.create_server_with_defaults(db, owner_id, server_name, icon_url)
+        try:
+            return await self.repo.create_server_with_defaults(db, owner_id, server_name, icon_url)
+        except Exception:
+            # Si falla la base, el ícono recién subido no lo referencia nadie
+            await asyncio.to_thread(storage.delete_image, icon_url)
+            raise
 
     async def leave_server(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> None:
         server = await self.repo.get_server_by_id(db, server_id)

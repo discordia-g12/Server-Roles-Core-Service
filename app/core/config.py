@@ -22,6 +22,12 @@ class Settings(BaseSettings):
     rabbitmq_password: str = "admin"
     rabbitmq_exchange: str = "server.events"
 
+    # Íconos de servidor (S3). En EC2 las credenciales salen del rol de la instancia; en local, de
+    # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY o de AWS_PROFILE (los lee boto3, no esta clase).
+    aws_region: str = "us-east-1"
+    s3_bucket: str = ""
+    s3_public_base_url: str = ""  # vacío: https://<bucket>.s3.<region>.amazonaws.com
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
