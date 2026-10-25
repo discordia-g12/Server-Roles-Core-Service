@@ -38,6 +38,8 @@ def s3(monkeypatch):
     monkeypatch.setattr(storage.settings, "s3_bucket", "media")
     monkeypatch.setattr(storage.settings, "aws_region", "us-east-1")
     monkeypatch.setattr(storage.settings, "s3_public_base_url", "")
+    monkeypatch.setattr(storage.settings, "aws_access_key_id", "test-key")
+    monkeypatch.setattr(storage.settings, "aws_secret_access_key", "test-secret")
     return fake
 
 
@@ -61,11 +63,14 @@ def test_upload_uses_custom_public_base_url(s3, monkeypatch):
     assert url.startswith("https://media.discordia.lol/server-icons/")
 
 
-def test_upload_without_bucket_configured_fails(s3, monkeypatch):
-    monkeypatch.setattr(storage.settings, "s3_bucket", "")
+@pytest.mark.parametrize("missing", ["s3_bucket", "aws_access_key_id", "aws_secret_access_key"])
+def test_upload_without_config_fails_and_does_not_call_s3(s3, monkeypatch, missing):
+    """Sin bucket o sin claves no se intenta subir (boto3 no sale a buscar credenciales a la EC2)."""
+    monkeypatch.setattr(storage.settings, missing, "")
 
     with pytest.raises(StorageUnavailableError):
         upload_image(b"img", "server-icons")
+    assert s3.put == []
 
 
 def test_upload_s3_error_becomes_storage_unavailable(s3):
