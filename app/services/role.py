@@ -94,7 +94,7 @@ class RoleService:
         await self._get_role(db, server_id, role_id)
         member = await self._get_member(db, server_id, target_user_id)
 
-        await self.repo.assign_role(db, member.id, role_id)
+        await self.repo.assign_role(db, member.id, role_id, server_id=server_id, user_id=target_user_id)
 
     async def remove_role_from_member(
         self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_id: uuid.UUID, target_user_id: str
@@ -103,7 +103,9 @@ class RoleService:
         await self._get_role(db, server_id, role_id)
         member = await self._get_member(db, server_id, target_user_id)
 
-        removed = await self.repo.remove_role_assignment(db, member.id, role_id)
+        removed = await self.repo.remove_role_assignment(
+            db, member.id, role_id, server_id=server_id, user_id=target_user_id
+        )
         if not removed:
             raise HTTPException(
                 status_code=404,

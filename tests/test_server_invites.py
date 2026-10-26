@@ -295,7 +295,34 @@ def test_get_invite_preview_success():
     assert data["server_id"] == server_id
     assert data["code"] == code
     assert "server_name" in data
+    assert "server_icon" in data
     assert data["member_count"] >= 1
+
+
+def test_get_invite_preview_returns_server_icon():
+    """La vista previa de la invitación muestra el ícono guardado del servidor."""
+    import io
+
+    from PIL import Image
+
+    owner_id = str(uuid.uuid4())
+    buffer = io.BytesIO()
+    Image.new("RGB", (10, 10), color="red").save(buffer, format="PNG")
+    res_server = client.post(
+        "/api/v1/servers",
+        data={"name": "Server With Icon"},
+        files={"icon": ("icon.png", buffer.getvalue(), "image/png")},
+        headers={"x-user-id": owner_id},
+    )
+    server = res_server.json()
+
+    code = client.post(
+        f"/api/v1/servers/{server['id']}/invites", json={"max_uses": 1}, headers={"x-user-id": owner_id}
+    ).json()["code"]
+    preview = client.get(f"/api/v1/invites/{code}", headers={"x-user-id": str(uuid.uuid4())}).json()
+
+    assert server["icon_url"] is not None
+    assert preview["server_icon"] == server["icon_url"]
 
 def test_get_invite_preview_invalid_code():
     """

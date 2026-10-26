@@ -63,6 +63,14 @@ class UnprocessableEntityError(AppException):
     title = "Validation Error"
 
 
+class ServiceUnavailableError(AppException):
+    status_code = 503
+    title = "Service Unavailable"
+
+    def __init__(self, detail: str = "The request could not be processed right now. Try again later."):
+        super().__init__(detail)
+
+
 # Domain-Specific Exceptions
 class ServerNotFoundError(NotFoundError):
     def __init__(self, detail: str = "Server not found."):
@@ -89,6 +97,11 @@ class DuplicateChannelNameError(BadRequestError):
         super().__init__(detail)
 
 
+class StorageUnavailableError(ServiceUnavailableError):
+    def __init__(self, detail: str = "The image could not be stored. Try again later."):
+        super().__init__(detail)
+
+
 __all__ = [
     "AppException",
     "BadRequestError",
@@ -100,6 +113,8 @@ __all__ = [
     "NotFoundError",
     "RoleNotFoundError",
     "ServerNotFoundError",
+    "ServiceUnavailableError",
+    "StorageUnavailableError",
     "UnauthorizedError",
     "UnprocessableEntityError",
 ]

@@ -2,6 +2,7 @@ from fastapi import FastAPI, Response, status
 from sqlalchemy import text
 
 from app.api.internal import router as internal_router
+from app.api.moderation import router as moderation_router
 from app.api.server import router as server_router
 from app.core.exceptions import register_exception_handlers
 from app.db import engine
@@ -11,7 +12,7 @@ register_exception_handlers(app)
 
 
 app.include_router(server_router)
-
+app.include_router(moderation_router)
 app.include_router(internal_router)
 
 @app.get("/")

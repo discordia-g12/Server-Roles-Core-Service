@@ -10,6 +10,7 @@ from app.models.server_ban import ServerBan
 from app.models.server_invite import ServerInvite
 from app.models.server_member import ServerMember
 from app.models.server_mute import ServerMute
+from app.models.server_ownership_transfer import ServerOwnershipTransfer
 
 __all__ = [
     "Server",
@@ -24,4 +25,5 @@ __all__ = [
     "ChannelPermissionOverride",
     "OutboxEvent",
     "ServerInvite",
+    "ServerOwnershipTransfer",
 ]
