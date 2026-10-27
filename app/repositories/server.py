@@ -57,6 +57,24 @@ class ServerRepository:
     async def get_server_by_id(self, db: AsyncSession, server_id: uuid.UUID) -> Server | None:
         return await db.scalar(select(Server).where(Server.id == server_id))
 
+    async def get_member_permission_bitmasks(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> list[int]:
+        """Permisos de cada rol del usuario en el servidor (vacío si no es miembro)."""
+        stmt = (
+            select(Role.permissions_bitmask)
+            .join(RoleAssignment, RoleAssignment.role_id == Role.id)
+            .join(ServerMember, ServerMember.id == RoleAssignment.server_member_id)
+            .where(ServerMember.server_id == server_id, ServerMember.user_id == user_id)
+        )
+        return list((await db.execute(stmt)).scalars().all())
+
+    async def set_icon(self, db: AsyncSession, server: Server, icon_url: str | None) -> Server:
+        """Guarda el ícono nuevo (o None para quitarlo) y avisa con server.updated en el mismo commit."""
+        server.icon_url = icon_url
+        add_outbox_event(db, "server.updated", {"server_id": str(server.id)})
+        await db.commit()
+        await db.refresh(server, attribute_names=["channels", "categories"])
+        return server
+
     async def get_server_member(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> ServerMember | None:
         stmt = select(ServerMember).where(
             ServerMember.server_id == server_id,
