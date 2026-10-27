@@ -21,6 +21,8 @@ class ServerResponse(BaseModel):
     created_at: datetime
     channels: list[ChannelResponse] = []
     categories: list[CategoryResponse] = []
+    # Permisos efectivos de quien pide (bitmask); solo en las respuestas que lo calculan
+    my_permissions: int | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

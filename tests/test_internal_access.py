@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from fastapi.testclient import TestClient
 from sqlalchemy import select, update
 
-from app.core.permissions import DEFAULT_ROLE_PERMISSIONS, Permission
+from app.core.permissions import ALL_PERMISSIONS, DEFAULT_ROLE_PERMISSIONS, Permission
 from app.main import app
 from app.models.channel_permission_override import ChannelPermissionOverride
 from app.models.role import Role
@@ -404,3 +404,66 @@ def test_member_without_connect_is_still_forbidden():
     set_default_role_permissions(server_id, int(DEFAULT_ROLE_PERMISSIONS & ~Permission.CONNECT))
 
     assert get_can_connect(channel_id, user_id).status_code == 403
+
+
+# ---------- my_permissions en GET /servers (el front muestra solo lo que puede hacer) ----------
+
+
+def my_server(user_id: str, server_id: str) -> dict:
+    response = client.get("/api/v1/servers", headers=headers_for(user_id))
+    assert response.status_code == 200, response.json()
+    return next(server for server in response.json() if server["id"] == server_id)
+
+
+def test_owner_gets_every_permission_in_server_and_channels():
+    owner_id = str(uuid.uuid4())
+    server_id, _ = create_server(owner_id)
+
+    server = my_server(owner_id, server_id)
+
+    assert server["my_permissions"] == ALL_PERMISSIONS
+    assert all(channel["my_permissions"] == ALL_PERMISSIONS for channel in server["channels"])
+
+
+def test_member_gets_the_permissions_of_their_roles():
+    owner_id = str(uuid.uuid4())
+    server_id, _ = create_server(owner_id)
+    user_id, _ = add_member(server_id)
+
+    server = my_server(user_id, server_id)
+
+    assert server["my_permissions"] == int(DEFAULT_ROLE_PERMISSIONS)
+    assert not server["my_permissions"] & Permission.MANAGE_CHANNELS.value
+
+
+def test_channel_permissions_include_the_channel_overrides():
+    owner_id = str(uuid.uuid4())
+    server_id, _ = create_server(owner_id)
+    voice_id = create_voice_channel(server_id, owner_id)
+    user_id, _ = add_member(server_id)
+    add_override(voice_id, deny=Permission.CONNECT.value, role_id=default_role_id(server_id))
+
+    server = my_server(user_id, server_id)
+    channels = {channel["id"]: channel for channel in server["channels"]}
+
+    assert server["my_permissions"] & Permission.CONNECT.value
+    assert not channels[voice_id]["my_permissions"] & Permission.CONNECT.value
+    other_voice = next(c for c in server["channels"] if c["type"] == "voice" and c["id"] != voice_id)
+    assert other_voice["my_permissions"] & Permission.CONNECT.value
+
+
+def test_administrator_gets_every_permission():
+    owner_id = str(uuid.uuid4())
+    server_id, _ = create_server(owner_id)
+    user_id, _ = add_member(server_id)
+    set_default_role_permissions(server_id, int(DEFAULT_ROLE_PERMISSIONS | Permission.ADMINISTRATOR))
+
+    assert my_server(user_id, server_id)["my_permissions"] == ALL_PERMISSIONS
+
+
+def test_created_server_includes_my_permissions():
+    owner_id = str(uuid.uuid4())
+    response = client.post("/api/v1/servers", data={"name": "Nuevo"}, headers=headers_for(owner_id))
+
+    assert response.status_code == 201
+    assert response.json()["my_permissions"] == ALL_PERMISSIONS
