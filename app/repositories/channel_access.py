@@ -58,6 +58,23 @@ class ChannelAccessRepository:
         )
         return list(result.scalars().all())
 
+    async def get_overrides_for_channels(
+        self, db: AsyncSession, channel_ids: list[uuid.UUID], member_id: uuid.UUID, role_ids: list[uuid.UUID]
+    ) -> list[ChannelPermissionOverride]:
+        """Como get_channel_overrides, pero para varios canales en una sola consulta."""
+        if not channel_ids:
+            return []
+        conditions = [ChannelPermissionOverride.server_member_id == member_id]
+        if role_ids:
+            conditions.append(ChannelPermissionOverride.role_id.in_(role_ids))
+        result = await db.execute(
+            select(ChannelPermissionOverride).where(
+                ChannelPermissionOverride.channel_id.in_(channel_ids),
+                or_(*conditions),
+            )
+        )
+        return list(result.scalars().all())
+
     async def get_active_mute(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> ServerMute | None:
         """Mute vigente: sin vencimiento o que todavía no venció."""
         return await db.scalar(

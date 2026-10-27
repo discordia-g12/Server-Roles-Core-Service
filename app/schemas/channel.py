@@ -43,5 +43,8 @@ class ChannelResponse(BaseModel):
     position: int
     topic: str | None = None
     category_id: UUID | None = None
+    # Permisos efectivos de quien pide en este canal (bitmask, con los overrides del canal); solo en las
+    # respuestas que lo calculan (GET /servers)
+    my_permissions: int | None = None
 
     model_config = ConfigDict(from_attributes=True)

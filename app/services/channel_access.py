@@ -1,4 +1,5 @@
 import uuid
+from collections import defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -6,6 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import ALL_PERMISSIONS, Permission, effective_channel_permissions
+from app.models.server import Server
 from app.repositories.channel_access import ChannelAccessRepository
 from app.schemas.internal import CanConnectResponse, CanSendResponse, ChannelAccessResponse
 
@@ -64,6 +66,47 @@ class ChannelAccessService:
         )
         return ChannelAccess(server_id=server_id, permissions=permissions)
 
+    async def attach_my_permissions(self, db: AsyncSession, servers: list[Server], user_id: str) -> list[Server]:
+        """Agrega a cada servidor y a cada uno de sus canales `my_permissions`: los permisos efectivos del
+        usuario (en los canales, con sus overrides). El front los usa para mostrar solo lo que puede hacer;
+        cada acción se sigue chequeando en su endpoint.
+        """
+        for server in servers:
+            channels = list(server.channels)
+            if server.owner_id == user_id:
+                server.my_permissions = ALL_PERMISSIONS
+                for channel in channels:
+                    channel.my_permissions = ALL_PERMISSIONS
+                continue
+
+            member = await self.repo.get_member(db, server.id, user_id)
+            if not member:
+                server.my_permissions = 0
+                for channel in channels:
+                    channel.my_permissions = 0
+                continue
+
+            roles = await self.repo.get_member_roles(db, member.id)
+            role_ids = [role_id for role_id, _ in roles]
+            role_bitmasks = [bitmask for _, bitmask in roles]
+            server.my_permissions = effective_channel_permissions(
+                role_bitmasks=role_bitmasks, role_overrides=[], member_overrides=[]
+            )
+
+            overrides_by_channel = defaultdict(list)
+            for override in await self.repo.get_overrides_for_channels(
+                db, [channel.id for channel in channels], member.id, role_ids
+            ):
+                overrides_by_channel[override.channel_id].append(override)
+            for channel in channels:
+                overrides = overrides_by_channel[channel.id]
+                channel.my_permissions = effective_channel_permissions(
+                    role_bitmasks=role_bitmasks,
+                    role_overrides=[(o.allow_bitmask, o.deny_bitmask) for o in overrides if o.role_id],
+                    member_overrides=[(o.allow_bitmask, o.deny_bitmask) for o in overrides if o.server_member_id],
+                )
+        return servers
+
     async def get_text_channel_access(
         self, db: AsyncSession, channel_id: uuid.UUID, user_id: str
     ) -> ChannelAccessResponse:
@@ -107,4 +150,11 @@ class ChannelAccessService:
             raise HTTPException(
                 status_code=403, detail="User does not have permission to connect to this voice channel"
             )
-        return CanConnectResponse(server_id=str(access.server_id))
+        # El mute aplica también al dueño y a los administradores (como en el chat)
+        mute = await self.repo.get_active_mute(db, access.server_id, user_id)
+        return CanConnectResponse(
+            server_id=str(access.server_id),
+            can_speak=access.has(Permission.SPEAK) and mute is None,
+            can_video=access.has(Permission.VIDEO),
+            can_screen_share=access.has(Permission.SCREEN_SHARE),
+        )
