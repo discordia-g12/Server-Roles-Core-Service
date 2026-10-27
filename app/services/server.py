@@ -4,7 +4,8 @@ import uuid
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.exceptions import BadRequestError, ServerNotFoundError
+from app.core.permissions import Permission
+from app.exceptions import BadRequestError, MissingServerPermissionError, ServerNotFoundError
 from app.repositories.server import ServerRepository
 from app.services import storage
 from app.services.image import normalize_image
@@ -38,6 +39,48 @@ class ServerService:
             # Si falla la base, el ícono recién subido no lo referencia nadie
             await asyncio.to_thread(storage.delete_image, icon_url)
             raise
+
+    async def _get_manageable_server(self, db: AsyncSession, server_id: uuid.UUID, user_id: str):
+        """El servidor, si el usuario es el dueño o tiene MANAGE_SERVER o ADMINISTRATOR en algún rol."""
+        server = await self.repo.get_server_by_id(db, server_id)
+        if not server:
+            raise ServerNotFoundError()
+        if server.owner_id == user_id:
+            return server
+
+        required = Permission.ADMINISTRATOR.value | Permission.MANAGE_SERVER.value
+        bitmasks = await self.repo.get_member_permission_bitmasks(db, server_id, user_id)
+        if not any(mask & required for mask in bitmasks):
+            raise MissingServerPermissionError()
+        return server
+
+    async def update_icon(self, db: AsyncSession, server_id: uuid.UUID, user_id: str, icon: UploadFile):
+        """Reemplaza el ícono: sube el nuevo, lo guarda y recién después borra el anterior."""
+        server = await self._get_manageable_server(db, server_id, user_id)
+        previous_url = server.icon_url
+
+        image = normalize_image(await icon.read())
+        icon_url = await asyncio.to_thread(storage.upload_image, image, ICONS_PREFIX)
+        try:
+            updated = await self.repo.set_icon(db, server, icon_url)
+        except Exception:
+            await db.rollback()
+            await asyncio.to_thread(storage.delete_image, icon_url)
+            raise
+
+        await asyncio.to_thread(storage.delete_image, previous_url)
+        return updated
+
+    async def remove_icon(self, db: AsyncSession, server_id: uuid.UUID, user_id: str):
+        """Quita el ícono (el servidor vuelve a mostrar sus iniciales) y borra el archivo."""
+        server = await self._get_manageable_server(db, server_id, user_id)
+        previous_url = server.icon_url
+        if previous_url is None:
+            return server
+
+        updated = await self.repo.set_icon(db, server, None)
+        await asyncio.to_thread(storage.delete_image, previous_url)
+        return updated
 
     async def leave_server(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> None:
         server = await self.repo.get_server_by_id(db, server_id)

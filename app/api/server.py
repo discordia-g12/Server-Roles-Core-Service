@@ -49,6 +49,29 @@ async def create_server_endpoint(
     return created_server
 
 
+@router.put("/servers/{server_id}/icon", response_model=ServerResponse, status_code=200)
+async def update_server_icon_endpoint(
+    server_id: uuid.UUID,
+    icon: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Reemplaza el ícono (multipart, campo "icon"). Devuelve el servidor con la URL nueva."""
+    service = ServerService(ServerRepository())
+    return await service.update_icon(db, server_id=server_id, user_id=user_id, icon=icon)
+
+
+@router.delete("/servers/{server_id}/icon", response_model=ServerResponse, status_code=200)
+async def remove_server_icon_endpoint(
+    server_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Quita el ícono. Devuelve el servidor sin ícono."""
+    service = ServerService(ServerRepository())
+    return await service.remove_icon(db, server_id=server_id, user_id=user_id)
+
+
 @router.get("/servers/{server_id}/members", response_model=ServerMemberPage, status_code=200)
 async def get_server_members_endpoint(
     server_id: uuid.UUID,
