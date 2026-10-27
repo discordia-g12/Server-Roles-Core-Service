@@ -17,3 +17,8 @@ class CanSendResponse(BaseModel):
 class CanConnectResponse(BaseModel):
     can_connect: bool = True
     server_id: str
+    # Qué puede publicar en la llamada: Voice lo pasa al token de LiveKit
+    # SPEAK y sin mute vigente
+    can_speak: bool
+    can_video: bool
+    can_screen_share: bool

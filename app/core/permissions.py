@@ -25,6 +25,8 @@ class Permission(IntFlag):
     DEAFEN_MEMBERS = 1 << 18
     MOVE_MEMBERS = 1 << 19
     ADMINISTRATOR = 1 << 20
+    VIDEO = 1 << 21
+    SCREEN_SHARE = 1 << 22
 
 
 DEFAULT_ROLE_PERMISSIONS = (
@@ -37,6 +39,8 @@ DEFAULT_ROLE_PERMISSIONS = (
     | Permission.ADD_REACTIONS
     | Permission.CONNECT
     | Permission.SPEAK
+    | Permission.VIDEO
+    | Permission.SCREEN_SHARE
 )
 
 # El dueño y ADMINISTRATOR tienen todos los permisos, sin importar roles ni overrides

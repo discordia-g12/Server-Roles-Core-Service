@@ -107,4 +107,11 @@ class ChannelAccessService:
             raise HTTPException(
                 status_code=403, detail="User does not have permission to connect to this voice channel"
             )
-        return CanConnectResponse(server_id=str(access.server_id))
+        # El mute aplica también al dueño y a los administradores (como en el chat)
+        mute = await self.repo.get_active_mute(db, access.server_id, user_id)
+        return CanConnectResponse(
+            server_id=str(access.server_id),
+            can_speak=access.has(Permission.SPEAK) and mute is None,
+            can_video=access.has(Permission.VIDEO),
+            can_screen_share=access.has(Permission.SCREEN_SHARE),
+        )
