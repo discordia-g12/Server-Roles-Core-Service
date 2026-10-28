@@ -1,12 +1,12 @@
-fastapi>=0.110
-uvicorn[standard]>=0.29
-pydantic-settings>=2.0
-sqlalchemy[asyncio]>=2.0
-asyncpg>=0.29
-alembic>=1.13
-python-multipart>=0.0.9
-aio-pika>=9.4
-boto3>=1.35  # íconos de servidor en S3
-Pillow>=10.4  # validación y normalización de imágenes
-pytest>=8.0.0
-httpx>=0.27.0
+# Dependencias de runtime (las que instala la imagen de producción), fijadas con las versiones que corren hoy.
+# Herramientas de test/lint/seguridad: requirements-dev.txt. Las actualiza Dependabot con un PR.
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+pydantic-settings==2.16.1
+sqlalchemy[asyncio]==2.1.6
+asyncpg==0.32.0
+alembic==1.20.1
+python-multipart==0.0.32
+aio-pika==10.2.1
+boto3==1.43.119  # íconos de servidor en S3
+Pillow==13.0.0  # validación y normalización de imágenes

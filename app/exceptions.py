@@ -97,6 +97,11 @@ class DuplicateChannelNameError(BadRequestError):
         super().__init__(detail)
 
 
+class MissingServerPermissionError(ForbiddenError):
+    def __init__(self, detail: str = "Missing required permission: MANAGE_SERVER"):
+        super().__init__(detail)
+
+
 class StorageUnavailableError(ServiceUnavailableError):
     def __init__(self, detail: str = "The image could not be stored. Try again later."):
         super().__init__(detail)
@@ -110,6 +115,7 @@ __all__ = [
     "DuplicateChannelNameError",
     "ForbiddenError",
     "InsufficientPermissionsError",
+    "MissingServerPermissionError",
     "NotFoundError",
     "RoleNotFoundError",
     "ServerNotFoundError",
