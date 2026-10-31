@@ -41,7 +41,9 @@ class RoleService:
         return member
 
     async def get_roles(self, db: AsyncSession, server_id: uuid.UUID, user_id: str):
-        await self._require_manage_permission(db, server_id, user_id)
+        """Cualquier miembro puede ver los roles (para mostrar y mencionar); modificarlos exige MANAGE_ROLES."""
+        if not await self.repo.is_member(db, server_id, user_id):
+            raise HTTPException(status_code=403, detail="You are not a member of this server.")
         return await self.repo.get_roles_by_server(db, server_id)
 
     async def create_role(

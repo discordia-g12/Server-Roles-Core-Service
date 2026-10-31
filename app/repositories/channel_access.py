@@ -43,6 +43,23 @@ class ChannelAccessRepository:
         )
         return [(role_id, bitmask) for role_id, bitmask in result.all()]
 
+    async def get_mentionable_role_ids(self, db: AsyncSession, server_id: uuid.UUID) -> list[uuid.UUID]:
+        """Roles del servidor menos el por defecto (a ese se lo menciona con @everyone)."""
+        result = await db.execute(
+            select(Role.id).where(Role.server_id == server_id, Role.is_default.is_(False))
+        )
+        return list(result.scalars().all())
+
+    async def get_user_role_ids(self, db: AsyncSession, user_id: str) -> list[uuid.UUID]:
+        """Roles del usuario en todos los servidores donde es miembro, menos los por defecto."""
+        result = await db.execute(
+            select(Role.id)
+            .join(RoleAssignment, RoleAssignment.role_id == Role.id)
+            .join(ServerMember, ServerMember.id == RoleAssignment.server_member_id)
+            .where(ServerMember.user_id == user_id, Role.is_default.is_(False))
+        )
+        return list(result.scalars().all())
+
     async def get_channel_overrides(
         self, db: AsyncSession, channel_id: uuid.UUID, member_id: uuid.UUID, role_ids: list[uuid.UUID]
     ) -> list[ChannelPermissionOverride]:

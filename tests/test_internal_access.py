@@ -113,7 +113,13 @@ def test_owner_can_view_and_send():
     response = get_access(channel_id, owner_id)
 
     assert response.status_code == 200
-    assert response.json() == {"server_id": server_id, "can_send": True, "muted_until": None}
+    assert response.json() == {
+        "server_id": server_id,
+        "can_send": True,
+        "muted_until": None,
+        "can_mention_everyone": True,
+        "mentionable_role_ids": [],
+    }
 
 
 def test_member_with_default_role_can_view_and_send():

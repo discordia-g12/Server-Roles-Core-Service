@@ -23,7 +23,7 @@ async def channel_access(
     db: AsyncSession = Depends(get_db),
 ):
     """Chat: abrir el WebSocket y leer el historial. 404 canal inexistente; 403 no miembro, baneado o sin
-    VIEW_CHANNELS; 200 con `can_send` y `muted_until`."""
+    VIEW_CHANNELS; 200 con `can_send`, `muted_until`, `can_mention_everyone` y `mentionable_role_ids`."""
     return await ChannelAccessService().get_text_channel_access(db, channel_id, user_id)
 
 
@@ -32,8 +32,8 @@ async def visible_channels(
     user_id: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """Chat: los canales de texto que el usuario puede ver, para calcular sus no leídos. 200 con lista vacía
-    si no es miembro de ningún servidor."""
+    """Chat: los canales de texto que el usuario puede ver y sus roles, para calcular no leídos y menciones.
+    200 con listas vacías si no es miembro de ningún servidor."""
     return await ChannelAccessService().get_visible_text_channels(db, user_id)
 
 
