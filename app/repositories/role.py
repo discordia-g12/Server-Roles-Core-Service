@@ -17,6 +17,12 @@ class RoleRepository:
         result = await db.execute(query)
         return list(result.scalars().all())
 
+    async def is_member(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> bool:
+        member_id = await db.scalar(
+            select(ServerMember.id).where(ServerMember.server_id == server_id, ServerMember.user_id == user_id)
+        )
+        return member_id is not None
+
     async def get_next_position(self, db: AsyncSession, server_id: uuid.UUID) -> int:
         query = select(func.max(Role.position)).where(Role.server_id == server_id)
         result = await db.execute(query)

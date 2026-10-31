@@ -120,6 +120,9 @@ class ChannelAccessService:
 
         403 si no tiene VIEW_CHANNELS. `muted_until` solo se informa si el mute es lo único que le impide
         escribir, así quien lo recibe puede habilitarlo al vencer sin volver a preguntar.
+
+        Menciones: mencionar a @everyone o a un rol exige MENTION_EVERYONE. Sin ese permiso
+        `mentionable_role_ids` va vacío y Chat guarda esas menciones como texto plano.
         """
         access = await self.resolve(db, channel_id, user_id)
         if not access.has(Permission.VIEW_CHANNELS):
@@ -132,10 +135,17 @@ class ChannelAccessService:
         if mute and mute.expires_at and has_send_permission:
             muted_until = to_utc_iso(mute.expires_at)
 
+        can_mention_everyone = access.has(Permission.MENTION_EVERYONE)
+        mentionable_role_ids = (
+            await self.repo.get_mentionable_role_ids(db, access.server_id) if can_mention_everyone else []
+        )
+
         return ChannelAccessResponse(
             server_id=str(access.server_id),
             can_send=has_send_permission and mute is None,
             muted_until=muted_until,
+            can_mention_everyone=can_mention_everyone,
+            mentionable_role_ids=[str(role_id) for role_id in mentionable_role_ids],
         )
 
     async def get_visible_text_channels(self, db: AsyncSession, user_id: str) -> VisibleChannelsResponse:
@@ -143,16 +153,19 @@ class ChannelAccessService:
 
         Chat lo usa para los no leídos: así cuenta solo los canales que el usuario puede leer, sin confiar en
         la lista que mande el cliente. Un baneado deja de ser miembro, así que su servidor no aparece.
+        `role_ids` son sus roles (sin los por defecto), para contar las menciones de rol.
         """
         servers = await ServerRepository().get_user_servers(db, user_id)
         await self.attach_my_permissions(db, servers, user_id)
+        role_ids = await self.repo.get_user_role_ids(db, user_id)
         return VisibleChannelsResponse(
             channel_ids=[
                 str(channel.id)
                 for server in servers
                 for channel in server.channels
                 if channel.type == "text" and channel.my_permissions & Permission.VIEW_CHANNELS.value
-            ]
+            ],
+            role_ids=[str(role_id) for role_id in role_ids],
         )
 
     async def check_can_send(self, db: AsyncSession, channel_id: uuid.UUID, user_id: str) -> CanSendResponse:

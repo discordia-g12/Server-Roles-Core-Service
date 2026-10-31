@@ -3,6 +3,7 @@ import uuid
 from fastapi.testclient import TestClient
 
 from app.main import app
+from tests.test_internal_access import add_member
 
 client = TestClient(app)
 
@@ -107,3 +108,21 @@ def test_get_roles_only_returns_roles_from_that_server():
     names = [r["name"] for r in body]
     assert "Role from server A" not in names
     assert "Role from server B" in names
+
+
+def test_get_roles_member_without_manage_roles_can_list_them():
+    """Menciones (#46): cualquier miembro ve los roles para mostrarlos y mencionarlos. Modificarlos sigue
+    exigiendo MANAGE_ROLES."""
+    owner_id = str(uuid.uuid4())
+    server_id = create_test_server(owner_id)
+    create_test_role(server_id, owner_id, "Soporte")
+    member_id, _ = add_member(server_id)
+
+    response = get_roles(server_id, member_id)
+
+    assert response.status_code == 200
+    assert [r["name"] for r in response.json()] == ["@everyone", "Soporte"]
+    created = client.post(
+        f"/api/v1/servers/{server_id}/roles", json={"name": "Otro"}, headers={"x-user-id": member_id}
+    )
+    assert created.status_code == 403
