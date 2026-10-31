@@ -9,6 +9,11 @@ class ChannelAccessResponse(BaseModel):
     muted_until: str | None = None
 
 
+class VisibleChannelsResponse(BaseModel):
+    # Canales de texto con VIEW_CHANNELS, de todos los servidores donde es miembro
+    channel_ids: list[str]
+
+
 class CanSendResponse(BaseModel):
     can_send: bool = True
     server_id: str

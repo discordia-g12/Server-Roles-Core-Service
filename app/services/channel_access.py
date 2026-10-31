@@ -9,7 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.permissions import ALL_PERMISSIONS, Permission, effective_channel_permissions
 from app.models.server import Server
 from app.repositories.channel_access import ChannelAccessRepository
-from app.schemas.internal import CanConnectResponse, CanSendResponse, ChannelAccessResponse
+from app.repositories.server import ServerRepository
+from app.schemas.internal import (
+    CanConnectResponse,
+    CanSendResponse,
+    ChannelAccessResponse,
+    VisibleChannelsResponse,
+)
 
 
 @dataclass
@@ -130,6 +136,23 @@ class ChannelAccessService:
             server_id=str(access.server_id),
             can_send=has_send_permission and mute is None,
             muted_until=muted_until,
+        )
+
+    async def get_visible_text_channels(self, db: AsyncSession, user_id: str) -> VisibleChannelsResponse:
+        """Canales de texto que el usuario puede ver (VIEW_CHANNELS) en todos sus servidores.
+
+        Chat lo usa para los no leídos: así cuenta solo los canales que el usuario puede leer, sin confiar en
+        la lista que mande el cliente. Un baneado deja de ser miembro, así que su servidor no aparece.
+        """
+        servers = await ServerRepository().get_user_servers(db, user_id)
+        await self.attach_my_permissions(db, servers, user_id)
+        return VisibleChannelsResponse(
+            channel_ids=[
+                str(channel.id)
+                for server in servers
+                for channel in server.channels
+                if channel.type == "text" and channel.my_permissions & Permission.VIEW_CHANNELS.value
+            ]
         )
 
     async def check_can_send(self, db: AsyncSession, channel_id: uuid.UUID, user_id: str) -> CanSendResponse:
