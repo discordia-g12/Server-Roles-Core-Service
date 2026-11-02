@@ -100,7 +100,7 @@ contrato completo lo genera FastAPI: `http://localhost:8080/docs` y `/openapi.js
 | Servidores | `POST /servers` (form: `name` y un `icon` opcional), `GET /servers` (los del usuario, con canales, categorías y `my_permissions`), `DELETE /servers/{id}/leave` |
 | Ícono | `PUT` y `DELETE /servers/{id}/icon` (JPEG, PNG o WebP hasta 5 MB; se guarda en S3 como WebP) |
 | Canales y categorías | `POST`, `PATCH` y `DELETE` de `/servers/{id}/channels` y `/categories`; `PUT .../channels/order` y `.../categories/order` |
-| Roles | `GET` y `POST /servers/{id}/roles`; `PATCH` (nombre y color), `PATCH .../permissions`, `PATCH .../default` y `DELETE` de `/roles/{role_id}`; `GET .../members`; `PUT` y `DELETE .../members/{user_id}` (asignar y quitar) |
+| Roles | `GET /servers/{id}/roles` (cualquier miembro: los usa la web para mostrar y mencionar roles); `POST /servers/{id}/roles`; `PATCH` (nombre y color), `PATCH .../permissions`, `PATCH .../default` y `DELETE` de `/roles/{role_id}`; `GET .../members`; `PUT` y `DELETE .../members/{user_id}` (asignar y quitar) |
 | Miembros | `GET /servers/{id}/members` (paginado); `DELETE /servers/{id}/members/{user_id}` (expulsar) |
 | Moderación | `POST`, `GET` y `DELETE /servers/{id}/bans`; `POST` y `DELETE /servers/{id}/mutes` |
 | Invitaciones | `POST /servers/{id}/invites`, `DELETE /servers/{id}/invites/{code}`, `GET /invites/{code}` (vista previa), `POST /invites/{code}/join` |
@@ -112,7 +112,8 @@ Hoy no tienen autenticación: solo se llega a ellos por la red entre nodos.
 
 | Ruta | Quién la usa | Devuelve |
 |---|---|---|
-| `GET /internal/channels/{id}/access?user_id=` | Chat, al abrir el WebSocket y al pedir el historial | `403` si no puede ver el canal; si puede, `server_id`, `can_send` y `muted_until` |
+| `GET /internal/channels/{id}/access?user_id=` | Chat, al abrir el WebSocket, al pedir el historial y al enviar un mensaje con `@everyone` o una mención de rol | `403` si no puede ver el canal; si puede, `server_id`, `can_send`, `muted_until`, `can_mention_everyone` (MENTION_EVERYONE) y `mentionable_role_ids` (roles del servidor sin el por defecto; vacío sin ese permiso) |
+| `GET /internal/users/{id}/visible-channels` | Chat, para los no leídos y las menciones (`GET /unread`) | `channel_ids`: canales de texto con VIEW_CHANNELS en todos sus servidores; `role_ids`: sus roles, sin los por defecto |
 | `GET /internal/channels/{id}/can-connect?user_id=` | Voice, al unirse a una llamada | Si puede entrar y qué puede publicar (micrófono, cámara, pantalla) |
 | `GET /internal/channels/{id}/can-send?user_id=` | Versiones viejas de Chat | Deprecado: reemplazado por `access` |
 
