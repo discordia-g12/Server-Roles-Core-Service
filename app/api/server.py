@@ -13,7 +13,14 @@ from app.repositories.server import ServerRepository
 from app.schemas.category import CategoryCreate, CategoryReorder, CategoryResponse
 from app.schemas.channel import ChannelCreate, ChannelReorder, ChannelResponse, ChannelUpdate
 from app.schemas.invite import InviteCreate, InviteResponse
-from app.schemas.role import RoleCreate, RoleMemberResponse, RoleResponse, RoleUpdate, RoleUpdatePermissions
+from app.schemas.role import (
+    RoleCreate,
+    RoleMemberResponse,
+    RoleReorder,
+    RoleResponse,
+    RoleUpdate,
+    RoleUpdatePermissions,
+)
 from app.schemas.server import ServerCreate, ServerMemberPage, ServerResponse
 from app.schemas.server_transfer import ServerTransferCreate, ServerTransferResponse
 from app.services.category import CategoryService
@@ -191,6 +198,17 @@ async def create_role_endpoint(
 ):
     service = RoleService(RoleRepository())
     return await service.create_role(db, server_id, user_id, role_data)
+
+
+@router.put("/servers/{server_id}/roles/order", response_model=list[RoleResponse], status_code=200)
+async def reorder_roles_endpoint(
+    server_id: uuid.UUID,
+    reorder: RoleReorder,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = RoleService(RoleRepository())
+    return await service.reorder_roles(db, server_id, user_id, reorder)
 
 
 @router.delete("/servers/{server_id}/roles/{role_id}", status_code=204)
