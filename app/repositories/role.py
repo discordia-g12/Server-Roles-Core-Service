@@ -29,9 +29,7 @@ class RoleRepository:
         max_pos = result.scalar()
         return (max_pos + 1) if max_pos is not None else 0
 
-    async def create_role(
-        self, db: AsyncSession, server_id: uuid.UUID, name: str, color: str | None
-    ) -> Role:
+    async def create_role(self, db: AsyncSession, server_id: uuid.UUID, name: str, color: str | None) -> Role:
         position = await self.get_next_position(db, server_id)
         role = Role(
             server_id=server_id,
@@ -39,45 +37,38 @@ class RoleRepository:
             color=color,
             position=position,
             permissions_bitmask=int(DEFAULT_ROLE_PERMISSIONS),
-            is_default=False
+            is_default=False,
         )
         db.add(role)
         await db.commit()
         await db.refresh(role)
         return role
 
-    async def check_user_can_manage_roles(
-        self, db: AsyncSession, server_id: uuid.UUID, user_id: str
-    ) -> bool:
+    async def check_user_can_manage_roles(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> bool:
         server = await db.scalar(select(Server).where(Server.id == server_id))
         if not server:
             return False
         if server.owner_id == user_id:
             return True
-            
+
         query = (
             select(Role.permissions_bitmask)
             .join(RoleAssignment, RoleAssignment.role_id == Role.id)
             .join(ServerMember, ServerMember.id == RoleAssignment.server_member_id)
-            .where(
-                ServerMember.server_id == server_id,
-                ServerMember.user_id == user_id
-            )
+            .where(ServerMember.server_id == server_id, ServerMember.user_id == user_id)
         )
         result = await db.execute(query)
         bitmasks = result.scalars().all()
-        
+
         required_bits = Permission.ADMINISTRATOR | Permission.MANAGE_ROLES
-        
+
         for bitmask in bitmasks:
             if (bitmask & required_bits.value) != 0:
                 return True
-                
+
         return False
 
-    async def get_role_by_id(
-        self, db: AsyncSession, server_id: uuid.UUID, role_id: uuid.UUID
-    ) -> Role | None:
+    async def get_role_by_id(self, db: AsyncSession, server_id: uuid.UUID, role_id: uuid.UUID) -> Role | None:
         query = select(Role).where(Role.server_id == server_id, Role.id == role_id)
         result = await db.execute(query)
         return result.scalar_one_or_none()
@@ -109,9 +100,7 @@ class RoleRepository:
             .select_from(RoleAssignment)
             .join(ServerMember, ServerMember.id == RoleAssignment.server_member_id)
             .where(
-                ServerMember.server_id == server_id,
-                ServerMember.user_id == user_id,
-                RoleAssignment.role_id == role_id
+                ServerMember.server_id == server_id, ServerMember.user_id == user_id, RoleAssignment.role_id == role_id
             )
         )
         result = await db.execute(query)
@@ -124,14 +113,11 @@ class RoleRepository:
         query = (
             select(ServerMember)
             .join(RoleAssignment, RoleAssignment.server_member_id == ServerMember.id)
-            .where(
-                ServerMember.server_id == server_id,
-                RoleAssignment.role_id == role_id
-            )
+            .where(ServerMember.server_id == server_id, RoleAssignment.role_id == role_id)
         )
         result = await db.execute(query)
         return result.scalars().all()
-    
+
     async def get_member_by_user_id(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> ServerMember | None:
         query = select(ServerMember).where(ServerMember.server_id == server_id, ServerMember.user_id == user_id)
         result = await db.execute(query)
@@ -215,9 +201,7 @@ class RoleRepository:
         return True
 
     async def set_default_role(self, db: AsyncSession, server_id: uuid.UUID, role: Role) -> Role:
-        previous_default = await db.scalar(
-            select(Role).where(Role.server_id == server_id, Role.is_default.is_(True))
-        )
+        previous_default = await db.scalar(select(Role).where(Role.server_id == server_id, Role.is_default.is_(True)))
         if previous_default and previous_default.id != role.id:
             previous_default.is_default = False
             db.add(previous_default)
@@ -237,3 +221,23 @@ class RoleRepository:
         await db.commit()
         await db.refresh(role)
         return role
+
+    async def get_highest_role_position(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> int | None:
+        query = (
+            select(func.max(Role.position))
+            .select_from(RoleAssignment)
+            .join(Role, Role.id == RoleAssignment.role_id)
+            .join(ServerMember, ServerMember.id == RoleAssignment.server_member_id)
+            .where(ServerMember.server_id == server_id, ServerMember.user_id == user_id)
+        )
+        return await db.scalar(query)
+
+    async def reorder_roles(self, db: AsyncSession, server_id: uuid.UUID, ordered_roles: list[Role]) -> list[Role]:
+        for position, role in enumerate(ordered_roles):
+            role.position = position
+            db.add(role)
+        add_outbox_event(db, "roles.reordered", {"server_id": str(server_id)})
+        await db.commit()
+        for role in ordered_roles:
+            await db.refresh(role)
+        return ordered_roles
