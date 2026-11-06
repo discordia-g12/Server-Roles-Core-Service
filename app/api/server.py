@@ -21,7 +21,7 @@ from app.schemas.role import (
     RoleUpdate,
     RoleUpdatePermissions,
 )
-from app.schemas.server import ServerCreate, ServerMemberPage, ServerResponse
+from app.schemas.server import MutualServerResponse, ServerCreate, ServerMemberPage, ServerResponse
 from app.schemas.server_transfer import ServerTransferCreate, ServerTransferResponse
 from app.services.category import CategoryService
 from app.services.channel import ChannelService
@@ -40,6 +40,18 @@ async def get_user_servers_endpoint(
 ):
     service = ServerService(ServerRepository())
     return await service.get_user_servers(db, user_id)
+
+
+# Va antes de las rutas /servers/{server_id}/...: "mutual" no es un id de servidor.
+@router.get("/servers/mutual/{user_id}", response_model=list[MutualServerResponse], status_code=200)
+async def get_mutual_servers_endpoint(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    viewer_id: str = Depends(get_current_user_id),
+):
+    """Servidores del usuario autenticado donde también está user_id (perfil público)."""
+    service = ServerService(ServerRepository())
+    return await service.get_mutual_servers(db, viewer_id, user_id)
 
 
 @router.post("/servers", response_model=ServerResponse, status_code=201)

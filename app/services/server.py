@@ -22,6 +22,9 @@ class ServerService:
         servers = await self.repo.get_user_servers(db, user_id)
         return await ChannelAccessService().attach_my_permissions(db, servers, user_id)
 
+    async def get_mutual_servers(self, db: AsyncSession, viewer_id: str, other_user_id: str):
+        return await self.repo.get_mutual_servers(db, viewer_id, other_user_id)
+
     async def _with_my_permissions(self, db: AsyncSession, server, user_id: str):
         """El servidor con my_permissions de quien pide (las respuestas de servidor siempre lo traen)."""
         await ChannelAccessService().attach_my_permissions(db, [server], user_id)

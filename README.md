@@ -97,7 +97,7 @@ contrato completo lo genera FastAPI: `http://localhost:8080/docs` y `/openapi.js
 
 | Recurso | Rutas |
 |---|---|
-| Servidores | `POST /servers` (form: `name` y un `icon` opcional), `GET /servers` (los del usuario, con canales, categorías y `my_permissions`), `DELETE /servers/{id}/leave` |
+| Servidores | `POST /servers` (form: `name` y un `icon` opcional), `GET /servers` (los del usuario, con canales, categorías y `my_permissions`), `GET /servers/mutual/{user_id}` (los que comparte con otro usuario, para el perfil público), `DELETE /servers/{id}/leave` |
 | Ícono | `PUT` y `DELETE /servers/{id}/icon` (JPEG, PNG o WebP hasta 5 MB; se guarda en S3 como WebP) |
 | Canales y categorías | `POST`, `PATCH` y `DELETE` de `/servers/{id}/channels` y `/categories`; `PUT .../channels/order` y `.../categories/order` |
 | Roles | `GET /servers/{id}/roles` (cualquier miembro: los usa la web para mostrar y mencionar roles); `POST /servers/{id}/roles`; `PATCH` (nombre y color), `PATCH .../permissions`, `PATCH .../default` y `DELETE` de `/roles/{role_id}`; `GET .../members`; `PUT` y `DELETE .../members/{user_id}` (asignar y quitar) |

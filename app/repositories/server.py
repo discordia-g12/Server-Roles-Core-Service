@@ -1,13 +1,15 @@
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.core.permissions import DEFAULT_ROLE_PERMISSIONS
 from app.models.channel import Channel
 from app.models.role import Role
 from app.models.role_assignment import RoleAssignment
 from app.models.server import Server
+from app.models.server_ban import ServerBan
 from app.models.server_member import ServerMember
 from app.repositories.outbox import add_outbox_event
 
@@ -22,6 +24,27 @@ class ServerRepository:
         )
         result = await db.execute(stmt)
         return list(result.scalars().all())
+
+    async def get_mutual_servers(self, db: AsyncSession, viewer_id: str, other_user_id: str) -> list:
+        """Servidores donde están los dos y ninguno está baneado. Solo las columnas que usa el perfil público:
+        sin cargar Server entero, que trae canales y categorías por selectin."""
+        viewer = aliased(ServerMember)
+        other = aliased(ServerMember)
+        stmt = (
+            select(Server.id, Server.name, Server.icon_url)
+            .join(viewer, viewer.server_id == Server.id)
+            .join(other, other.server_id == Server.id)
+            .where(
+                viewer.user_id == viewer_id,
+                other.user_id == other_user_id,
+                ~exists().where(
+                    ServerBan.server_id == Server.id,
+                    ServerBan.user_id.in_([viewer_id, other_user_id]),
+                ),
+            )
+            .order_by(Server.created_at.asc(), Server.id.asc())
+        )
+        return list((await db.execute(stmt)).all())
 
     async def create_server_with_defaults(
         self, db: AsyncSession, owner_id: str, name: str, icon_url: str | None

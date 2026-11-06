@@ -27,6 +27,14 @@ class ServerResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class MutualServerResponse(BaseModel):
+    id: UUID
+    name: str
+    icon_url: str | None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ServerMemberResponse(BaseModel):
     id: UUID
     user_id: str
