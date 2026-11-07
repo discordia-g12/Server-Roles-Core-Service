@@ -11,6 +11,8 @@ class ChannelAccessResponse(BaseModel):
     can_mention_everyone: bool = False
     # Roles del servidor que se pueden mencionar (todos menos el por defecto, que es @everyone)
     mentionable_role_ids: list[str] = []
+    # MANAGE_MESSAGES en el canal: autoriza a moderadores a borrar mensajes de otros
+    can_manage_messages: bool = False
 
 
 class VisibleChannelsResponse(BaseModel):

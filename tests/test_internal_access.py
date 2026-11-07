@@ -119,6 +119,7 @@ def test_owner_can_view_and_send():
         "muted_until": None,
         "can_mention_everyone": True,
         "mentionable_role_ids": [],
+        "can_manage_messages": True,
     }
 
 
@@ -131,6 +132,19 @@ def test_member_with_default_role_can_view_and_send():
 
     assert response.status_code == 200
     assert response.json()["can_send"] is True
+    assert response.json()["can_manage_messages"] is False
+
+
+def test_member_with_manage_messages_can_manage_messages():
+    owner_id = str(uuid.uuid4())
+    server_id, channel_id = create_server(owner_id)
+    user_id, _ = add_member(server_id)
+    set_default_role_permissions(server_id, int(DEFAULT_ROLE_PERMISSIONS | Permission.MANAGE_MESSAGES))
+
+    response = get_access(channel_id, user_id)
+
+    assert response.status_code == 200
+    assert response.json()["can_manage_messages"] is True
 
 
 def test_administrator_bypasses_channel_deny():
@@ -144,6 +158,7 @@ def test_administrator_bypasses_channel_deny():
 
     assert response.status_code == 200
     assert response.json()["can_send"] is True
+    assert response.json()["can_manage_messages"] is True
 
 
 # ---------- Muteado: ve el canal pero no escribe ----------

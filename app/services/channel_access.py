@@ -139,6 +139,7 @@ class ChannelAccessService:
         mentionable_role_ids = (
             await self.repo.get_mentionable_role_ids(db, access.server_id) if can_mention_everyone else []
         )
+        can_manage_messages = access.has(Permission.MANAGE_MESSAGES)
 
         return ChannelAccessResponse(
             server_id=str(access.server_id),
@@ -146,6 +147,7 @@ class ChannelAccessService:
             muted_until=muted_until,
             can_mention_everyone=can_mention_everyone,
             mentionable_role_ids=[str(role_id) for role_id in mentionable_role_ids],
+            can_manage_messages=can_manage_messages,
         )
 
     async def get_visible_text_channels(self, db: AsyncSession, user_id: str) -> VisibleChannelsResponse:
