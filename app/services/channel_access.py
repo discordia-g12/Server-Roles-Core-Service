@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import ALL_PERMISSIONS, Permission, effective_channel_permissions
+from app.exceptions import ServerSuspendedError
 from app.models.server import Server
 from app.repositories.channel_access import ChannelAccessRepository
 from app.repositories.server import ServerRepository
@@ -50,6 +51,10 @@ class ChannelAccessService:
         if not channel:
             raise HTTPException(status_code=404, detail="Channel not found")
         server_id = channel.server_id
+
+        # Servidor suspendido por el staff (ADR-002): nadie lo usa, ni el dueño. Cubre chat, historial y voz
+        if await self.repo.is_server_suspended(db, server_id):
+            raise ServerSuspendedError()
 
         member = await self.repo.get_member(db, server_id, user_id)
         if not member:
@@ -157,7 +162,8 @@ class ChannelAccessService:
         la lista que mande el cliente. Un baneado deja de ser miembro, así que su servidor no aparece.
         `role_ids` son sus roles (sin los por defecto), para contar las menciones de rol.
         """
-        servers = await ServerRepository().get_user_servers(db, user_id)
+        # Los canales de un servidor suspendido no se leen, así que tampoco cuentan para no leídos
+        servers = [s for s in await ServerRepository().get_user_servers(db, user_id) if not s.is_suspended]
         await self.attach_my_permissions(db, servers, user_id)
         role_ids = await self.repo.get_user_role_ids(db, user_id)
         return VisibleChannelsResponse(

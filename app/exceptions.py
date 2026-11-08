@@ -1,9 +1,13 @@
 from typing import Any
 
+PROBLEM_TYPE_BASE = "https://discordia.app/problems"
+
 
 class AppException(Exception):
     status_code: int = 500
     title: str = "Internal Server Error"
+    # RFC 7807 "type": los clientes deciden por este campo. "about:blank" salvo los errores con tipo propio
+    type: str = "about:blank"
 
     def __init__(
         self,
@@ -123,5 +127,26 @@ __all__ = [
     "StorageUnavailableError",
     "UnauthorizedError",
     "UnprocessableEntityError",
+    "PROBLEM_TYPE_BASE",
+    "ServerSuspendedError",
+    "StaffOnlyError",
 ]
 
+
+class StaffOnlyError(ForbiddenError):
+    """Second barrier for staff endpoints. The first one is validate("staff") in Kong (Gateway ADR-002)."""
+
+    type = f"{PROBLEM_TYPE_BASE}/staff-only"
+
+    def __init__(self, detail: str = "Only platform staff can perform this action."):
+        super().__init__(detail)
+
+
+class ServerSuspendedError(ForbiddenError):
+    """The server was suspended by platform staff (ADR-002): nobody can use it until the suspension is lifted.
+    Clients show the server with its "suspended" banner instead of its channels."""
+
+    type = f"{PROBLEM_TYPE_BASE}/server-suspended"
+
+    def __init__(self, detail: str = "This server has been suspended by the platform."):
+        super().__init__(detail)

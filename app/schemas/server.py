@@ -23,8 +23,19 @@ class ServerResponse(BaseModel):
     categories: list[CategoryResponse] = []
     # Permisos efectivos de quien pide (bitmask); solo en las respuestas que lo calculan
     my_permissions: int | None = None
+    # Suspendido por el staff (ADR-002): sigue en la lista del miembro, con el cartel "suspended" y sin
+    # canales ni categorías
+    is_suspended: bool = False
 
     model_config = ConfigDict(from_attributes=True)
+
+
+def member_server_view(server) -> ServerResponse:
+    """Lo que ve un miembro: de un servidor suspendido, solo cuál es y que está suspendido."""
+    view = ServerResponse.model_validate(server)
+    if view.is_suspended:
+        return view.model_copy(update={"channels": [], "categories": [], "my_permissions": 0})
+    return view
 
 
 class MutualServerResponse(BaseModel):

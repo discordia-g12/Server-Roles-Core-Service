@@ -28,9 +28,10 @@ def problem_response(
     title: str,
     detail: str,
     invalid_params: list[dict[str, Any]] | None = None,
+    problem_type: str = "about:blank",
 ) -> JSONResponse:
     content: dict[str, Any] = {
-        "type": "about:blank",
+        "type": problem_type,
         "title": title,
         "status": status_code,
         "detail": detail,
@@ -53,6 +54,7 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
         title=exc.title,
         detail=exc.detail,
         invalid_params=exc.invalid_params,
+        problem_type=exc.type,
     )
 
 
