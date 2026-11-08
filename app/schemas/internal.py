@@ -13,6 +13,8 @@ class ChannelAccessResponse(BaseModel):
     mentionable_role_ids: list[str] = []
     # MANAGE_MESSAGES en el canal: autoriza a moderadores a borrar mensajes de otros
     can_manage_messages: bool = False
+    # ADD_REACTIONS en el canal: autoriza a agregar reacciones
+    can_add_reactions: bool = False
 
 
 class VisibleChannelsResponse(BaseModel):

@@ -120,6 +120,7 @@ def test_owner_can_view_and_send():
         "can_mention_everyone": True,
         "mentionable_role_ids": [],
         "can_manage_messages": True,
+        "can_add_reactions": True,
     }
 
 
@@ -133,6 +134,7 @@ def test_member_with_default_role_can_view_and_send():
     assert response.status_code == 200
     assert response.json()["can_send"] is True
     assert response.json()["can_manage_messages"] is False
+    assert response.json()["can_add_reactions"] is True
 
 
 def test_member_with_manage_messages_can_manage_messages():
@@ -145,6 +147,18 @@ def test_member_with_manage_messages_can_manage_messages():
 
     assert response.status_code == 200
     assert response.json()["can_manage_messages"] is True
+
+
+def test_member_without_add_reactions_cannot_add_reactions():
+    owner_id = str(uuid.uuid4())
+    server_id, channel_id = create_server(owner_id)
+    user_id, _ = add_member(server_id)
+    set_default_role_permissions(server_id, int(DEFAULT_ROLE_PERMISSIONS & ~Permission.ADD_REACTIONS))
+
+    response = get_access(channel_id, user_id)
+
+    assert response.status_code == 200
+    assert response.json()["can_add_reactions"] is False
 
 
 def test_administrator_bypasses_channel_deny():
