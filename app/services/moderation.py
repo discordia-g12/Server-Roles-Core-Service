@@ -107,7 +107,7 @@ class ModerationService:
         server = await self._get_server(db, server_id)
         # Permission is checked before looking up the ban so unprivileged users can't probe who is banned.
         await self._require_permission(db, server, user_id, Permission.BAN_MEMBERS)
-        removed = await self.repo.remove_ban(db, server_id, target_user_id)
+        removed = await self.repo.remove_ban(db, server_id, target_user_id, unbanned_by=user_id)
         if not removed:
             raise HTTPException(status_code=404, detail="Ban not found")
 
@@ -168,7 +168,7 @@ class ModerationService:
     ):
         server = await self._get_server(db, server_id)
         await self._require_permission(db, server, user_id, Permission.MUTE_MEMBERS)
-        removed = await self.repo.remove_mute(db, server_id, target_user_id)
+        removed = await self.repo.remove_mute(db, server_id, target_user_id, unmuted_by=user_id)
         if not removed:
             raise HTTPException(status_code=404, detail="Mute not found")
 

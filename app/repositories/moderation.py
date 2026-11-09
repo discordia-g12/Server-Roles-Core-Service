@@ -72,7 +72,9 @@ class ModerationRepository:
         await db.refresh(ban)
         return ban
 
-    async def remove_ban(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> bool:
+    async def remove_ban(
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, unbanned_by: str | None = None
+    ) -> bool:
         removed_id = await db.scalar(
             delete(ServerBan)
             .where(ServerBan.server_id == server_id, ServerBan.user_id == user_id)
@@ -87,6 +89,7 @@ class ModerationRepository:
             {
                 "server_id": str(server_id),
                 "user_id": user_id,
+                "unbanned_by": unbanned_by,
             },
         )
         await db.commit()
@@ -163,7 +166,9 @@ class ModerationRepository:
         await db.refresh(mute)
         return mute
 
-    async def remove_mute(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> bool:
+    async def remove_mute(
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, unmuted_by: str | None = None
+    ) -> bool:
         mute = await self.get_mute(db, server_id, user_id)
         if not mute:
             return False
@@ -175,6 +180,7 @@ class ModerationRepository:
             {
                 "server_id": str(server_id),
                 "user_id": user_id,
+                "unmuted_by": unmuted_by,
             },
         )
         await db.commit()
