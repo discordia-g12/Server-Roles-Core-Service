@@ -90,10 +90,23 @@ class ServerRepository:
         )
         return list((await db.execute(stmt)).scalars().all())
 
-    async def set_icon(self, db: AsyncSession, server: Server, icon_url: str | None) -> Server:
+    async def set_icon(
+        self, db: AsyncSession, server: Server, icon_url: str | None, updated_by: str | None = None
+    ) -> Server:
         """Guarda el ícono nuevo (o None para quitarlo) y avisa con server.updated en el mismo commit."""
+        old_icon = server.icon_url
         server.icon_url = icon_url
-        add_outbox_event(db, "server.updated", {"server_id": str(server.id)})
+        changes = {"icon_url": {"old": old_icon, "new": icon_url}}
+        add_outbox_event(
+            db,
+            "server.updated",
+            {
+                "server_id": str(server.id),
+                "name": server.name,
+                "changes": changes,
+                "updated_by": updated_by,
+            },
+        )
         await db.commit()
         await db.refresh(server, attribute_names=["channels", "categories"])
         return server

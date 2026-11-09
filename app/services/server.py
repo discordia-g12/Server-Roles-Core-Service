@@ -73,7 +73,7 @@ class ServerService:
         image = normalize_image(await icon.read())
         icon_url = await asyncio.to_thread(storage.upload_image, image, ICONS_PREFIX)
         try:
-            updated = await self.repo.set_icon(db, server, icon_url)
+            updated = await self.repo.set_icon(db, server, icon_url, updated_by=user_id)
         except Exception:
             await db.rollback()
             await asyncio.to_thread(storage.delete_image, icon_url)
@@ -89,7 +89,7 @@ class ServerService:
         if previous_url is None:
             return await self._with_my_permissions(db, server, user_id)
 
-        updated = await self.repo.set_icon(db, server, None)
+        updated = await self.repo.set_icon(db, server, None, updated_by=user_id)
         await asyncio.to_thread(storage.delete_image, previous_url)
         return await self._with_my_permissions(db, updated, user_id)
 

@@ -14,6 +14,7 @@ from app.schemas.internal import (
     CanConnectResponse,
     CanSendResponse,
     ChannelAccessResponse,
+    ServerPermissionsResponse,
     VisibleChannelsResponse,
 )
 
@@ -198,3 +199,45 @@ class ChannelAccessService:
             can_video=access.has(Permission.VIDEO),
             can_screen_share=access.has(Permission.SCREEN_SHARE),
         )
+
+    async def get_server_permissions(
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str
+    ) -> ServerPermissionsResponse:
+        owner_id = await self.repo.get_owner_id(db, server_id)
+        if owner_id is None:
+            raise HTTPException(status_code=404, detail="Server not found")
+
+        if owner_id == user_id:
+            return ServerPermissionsResponse(
+                server_id=str(server_id),
+                user_id=user_id,
+                is_owner=True,
+                can_moderate=True,
+                permissions_bitmask=ALL_PERMISSIONS,
+            )
+
+        member = await self.repo.get_member(db, server_id, user_id)
+        if not member:
+            raise HTTPException(status_code=403, detail="User is not a member of this server")
+
+        roles = await self.repo.get_member_roles(db, member.id)
+        role_bitmasks = [bitmask for _, bitmask in roles]
+        permissions_bitmask = effective_channel_permissions(
+            role_bitmasks=role_bitmasks, role_overrides=[], member_overrides=[]
+        )
+        moderation_bits = (
+            Permission.ADMINISTRATOR.value
+            | Permission.MANAGE_SERVER.value
+            | Permission.BAN_MEMBERS.value
+            | Permission.KICK_MEMBERS.value
+            | Permission.MUTE_MEMBERS.value
+        )
+        can_moderate = bool(permissions_bitmask & moderation_bits)
+        return ServerPermissionsResponse(
+            server_id=str(server_id),
+            user_id=user_id,
+            is_owner=False,
+            can_moderate=can_moderate,
+            permissions_bitmask=permissions_bitmask,
+        )
+

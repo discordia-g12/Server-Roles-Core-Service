@@ -37,3 +37,12 @@ class CanConnectResponse(BaseModel):
     can_speak: bool
     can_video: bool
     can_screen_share: bool
+
+
+class ServerPermissionsResponse(BaseModel):
+    server_id: str
+    user_id: str
+    is_owner: bool
+    can_moderate: bool
+    permissions_bitmask: int
+

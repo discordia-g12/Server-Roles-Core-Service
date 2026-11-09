@@ -12,6 +12,7 @@ from app.models.role_assignment import RoleAssignment
 from app.models.server_invite import ServerInvite
 from app.models.server_member import ServerMember
 from app.repositories.invite import InviteRepository
+from app.repositories.outbox import add_outbox_event
 
 MAX_RETRIES_CODE = 3
 class InviteService:
@@ -95,6 +96,17 @@ class InviteService:
                     raise HTTPException(status_code=500, detail="Failed to generate a unique invite code.")
                 continue
 
+        add_outbox_event(
+            db,
+            "invite.created",
+            {
+                "server_id": str(server_id),
+                "code": invite.code,
+                "created_by": user_id,
+                "max_uses": invite.max_uses,
+                "expires_at": invite.expires_at.isoformat() if invite.expires_at else None,
+            },
+        )
         await db.commit()
         await db.refresh(invite)
         return invite
@@ -203,4 +215,13 @@ class InviteService:
             raise HTTPException(status_code=404, detail="Invite not found.")
             
         invite.is_revoked = True
+        add_outbox_event(
+            db,
+            "invite.revoked",
+            {
+                "server_id": str(server_id),
+                "code": invite.code,
+                "revoked_by": user_id,
+            },
+        )
         await db.commit()

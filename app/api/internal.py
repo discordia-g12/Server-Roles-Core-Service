@@ -8,6 +8,7 @@ from app.schemas.internal import (
     CanConnectResponse,
     CanSendResponse,
     ChannelAccessResponse,
+    ServerPermissionsResponse,
     VisibleChannelsResponse,
 )
 from app.services.channel_access import ChannelAccessService
@@ -55,3 +56,18 @@ async def can_connect(
 ):
     """Voice: unirse a un canal de voz (CONNECT)."""
     return await ChannelAccessService().check_can_connect(db, channel_id, user_id)
+
+
+@router.get(
+    "/servers/{server_id}/members/{user_id}/permissions",
+    response_model=ServerPermissionsResponse,
+    status_code=200,
+)
+async def server_member_permissions(
+    server_id: uuid.UUID,
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Notification-Audit-Metrics: verificar si un usuario tiene permisos de moderación en el servidor."""
+    return await ChannelAccessService().get_server_permissions(db, server_id, user_id)
+
