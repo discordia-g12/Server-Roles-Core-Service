@@ -307,6 +307,16 @@ async def leave_server_endpoint(
     await service.leave_server(db, server_id, user_id)
 
 
+@router.delete("/servers/{server_id}", status_code=204)
+async def delete_server_endpoint(
+    server_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = ServerService(ServerRepository())
+    await service.delete_server(db, server_id, user_id)
+
+
 @router.patch("/servers/{server_id}/roles/{role_id}", response_model=RoleResponse, status_code=200)
 async def update_role_endpoint(
     server_id: uuid.UUID,

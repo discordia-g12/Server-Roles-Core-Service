@@ -5,7 +5,7 @@ from fastapi import HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import Permission
-from app.exceptions import BadRequestError, MissingServerPermissionError, ServerNotFoundError
+from app.exceptions import BadRequestError, ForbiddenError, MissingServerPermissionError, ServerNotFoundError
 from app.repositories.server import ServerRepository
 from app.services import storage
 from app.services.channel_access import ChannelAccessService
@@ -92,6 +92,19 @@ class ServerService:
         updated = await self.repo.set_icon(db, server, None)
         await asyncio.to_thread(storage.delete_image, previous_url)
         return await self._with_my_permissions(db, updated, user_id)
+
+    async def delete_server(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> None:
+        server = await self.repo.get_server_by_id(db, server_id)
+        if not server:
+            raise ServerNotFoundError()
+        if server.owner_id != user_id:
+            raise ForbiddenError("Only the server owner can delete this server.")
+
+        icon_url = server.icon_url
+        await self.repo.delete_server(db, server)
+
+        if icon_url:
+            await asyncio.to_thread(storage.delete_image, icon_url)
 
     async def leave_server(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> None:
         server = await self.repo.get_server_by_id(db, server_id)
