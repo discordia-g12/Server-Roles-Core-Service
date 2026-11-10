@@ -9,6 +9,7 @@ from app.models.server import Server
 from app.models.server_ban import ServerBan
 from app.models.server_invite import ServerInvite
 from app.models.server_member import ServerMember
+from app.models.server_member_event import ServerMemberEvent
 from app.models.server_mute import ServerMute
 from app.models.server_ownership_transfer import ServerOwnershipTransfer
 
@@ -17,6 +18,7 @@ __all__ = [
     "Category",
     "Channel",
     "ServerMember",
+    "ServerMemberEvent",
     "ServerBan",
     "ServerMute",
     "Role",
