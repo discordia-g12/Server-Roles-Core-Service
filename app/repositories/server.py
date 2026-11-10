@@ -1,4 +1,7 @@
 import uuid
+from collections import defaultdict
+from datetime import date, datetime, time, timedelta
+from typing import Any
 
 from sqlalchemy import exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +14,7 @@ from app.models.role_assignment import RoleAssignment
 from app.models.server import Server
 from app.models.server_ban import ServerBan
 from app.models.server_member import ServerMember
+from app.models.server_member_event import ServerMemberEvent
 from app.repositories.outbox import add_outbox_event
 
 
@@ -69,6 +73,7 @@ class ServerRepository:
 
         owner_member = ServerMember(server_id=server.id, user_id=owner_id)
         db.add(owner_member)
+        db.add(ServerMemberEvent(server_id=server.id, user_id=owner_id, event_type="join"))
         await db.flush()
 
         db.add(RoleAssignment(server_member_id=owner_member.id, role_id=default_role.id))
@@ -120,6 +125,7 @@ class ServerRepository:
         return result.scalars().first()
     
     async def remove_member(self, db: AsyncSession, member: ServerMember) -> None:
+        db.add(ServerMemberEvent(server_id=member.server_id, user_id=member.user_id, event_type="leave"))
         add_outbox_event(db, "member.left", {"server_id": str(member.server_id), "user_id": member.user_id})
         await db.delete(member)
         await db.commit()
@@ -164,3 +170,121 @@ class ServerRepository:
             for member in members
         ]
         return items, total or 0
+
+    async def delete_server(self, db: AsyncSession, server: Server) -> list[uuid.UUID]:
+        channel_ids_stmt = select(Channel.id).where(Channel.server_id == server.id)
+        channel_ids = list((await db.execute(channel_ids_stmt)).scalars().all())
+
+        add_outbox_event(
+            db,
+            "server.deleted",
+            {
+                "server_id": str(server.id),
+                "channel_ids": [str(cid) for cid in channel_ids],
+                "owner_id": server.owner_id,
+            },
+        )
+        await db.delete(server)
+        await db.commit()
+        return channel_ids
+
+    async def get_member_growth(
+        self, db: AsyncSession, server_id: uuid.UUID, start_date: date, end_date: date
+    ) -> dict[str, Any]:
+        start_datetime = datetime.combine(start_date, time.min)
+        end_datetime = datetime.combine(end_date, time.max)
+
+        stmt_baseline_joins = select(func.count()).select_from(ServerMemberEvent).where(
+            ServerMemberEvent.server_id == server_id,
+            ServerMemberEvent.event_type == "join",
+            ServerMemberEvent.created_at < start_datetime,
+        )
+        baseline_joins = await db.scalar(stmt_baseline_joins) or 0
+
+        stmt_baseline_leaves = select(func.count()).select_from(ServerMemberEvent).where(
+            ServerMemberEvent.server_id == server_id,
+            ServerMemberEvent.event_type.in_(["leave", "kick", "ban"]),
+            ServerMemberEvent.created_at < start_datetime,
+        )
+        baseline_leaves = await db.scalar(stmt_baseline_leaves) or 0
+
+        stmt_total_events = select(func.count()).select_from(ServerMemberEvent).where(
+            ServerMemberEvent.server_id == server_id
+        )
+        total_events = await db.scalar(stmt_total_events) or 0
+
+        if total_events == 0:
+            stmt_old_members = select(func.count()).select_from(ServerMember).where(
+                ServerMember.server_id == server_id,
+                ServerMember.joined_at < start_datetime,
+            )
+            baseline = await db.scalar(stmt_old_members) or 0
+        else:
+            baseline = max(0, baseline_joins - baseline_leaves)
+
+        if total_events > 0:
+            stmt_events = (
+                select(ServerMemberEvent)
+                .where(
+                    ServerMemberEvent.server_id == server_id,
+                    ServerMemberEvent.created_at >= start_datetime,
+                    ServerMemberEvent.created_at <= end_datetime,
+                )
+                .order_by(ServerMemberEvent.created_at.asc())
+            )
+            events = list((await db.execute(stmt_events)).scalars().all())
+        else:
+            stmt_members_in_period = select(ServerMember).where(
+                ServerMember.server_id == server_id,
+                ServerMember.joined_at >= start_datetime,
+                ServerMember.joined_at <= end_datetime,
+            )
+            members_in_period = list((await db.execute(stmt_members_in_period)).scalars().all())
+            events = [
+                ServerMemberEvent(
+                    server_id=m.server_id,
+                    user_id=m.user_id,
+                    event_type="join",
+                    created_at=m.joined_at,
+                )
+                for m in members_in_period
+            ]
+
+        daily_joins: dict[date, int] = defaultdict(int)
+        daily_leaves: dict[date, int] = defaultdict(int)
+        for ev in events:
+            ev_date = ev.created_at.date() if isinstance(ev.created_at, datetime) else ev.created_at
+            if ev.event_type == "join":
+                daily_joins[ev_date] += 1
+            elif ev.event_type in ("leave", "kick", "ban"):
+                daily_leaves[ev_date] += 1
+
+        data = []
+        curr = start_date
+        running_count = baseline
+        while curr <= end_date:
+            joins_count = daily_joins[curr]
+            leaves_count = daily_leaves[curr]
+            running_count = max(0, running_count + joins_count - leaves_count)
+            data.append({
+                "date": curr.isoformat(),
+                "member_count": running_count,
+                "joined": joins_count,
+                "left": leaves_count,
+            })
+            curr += timedelta(days=1)
+
+        stmt_count = select(func.count()).select_from(ServerMember).where(ServerMember.server_id == server_id)
+        current_count = await db.scalar(stmt_count) or 0
+
+        return {
+            "server_id": server_id,
+            "period": {
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "days": (end_date - start_date).days + 1,
+            },
+            "current_member_count": current_count,
+            "data": data,
+        }
+

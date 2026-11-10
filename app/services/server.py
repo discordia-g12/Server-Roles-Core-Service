@@ -1,11 +1,19 @@
 import asyncio
 import uuid
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import Permission
-from app.exceptions import BadRequestError, MissingServerPermissionError, ServerNotFoundError
+from app.exceptions import (
+    BadRequestError,
+    ForbiddenError,
+    MissingServerPermissionError,
+    ServerNotFoundError,
+    UnprocessableEntityError,
+)
 from app.repositories.server import ServerRepository
 from app.services import storage
 from app.services.channel_access import ChannelAccessService
@@ -93,6 +101,19 @@ class ServerService:
         await asyncio.to_thread(storage.delete_image, previous_url)
         return await self._with_my_permissions(db, updated, user_id)
 
+    async def delete_server(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> None:
+        server = await self.repo.get_server_by_id(db, server_id)
+        if not server:
+            raise ServerNotFoundError()
+        if server.owner_id != user_id:
+            raise ForbiddenError("Only the server owner can delete this server.")
+
+        icon_url = server.icon_url
+        await self.repo.delete_server(db, server)
+
+        if icon_url:
+            await asyncio.to_thread(storage.delete_image, icon_url)
+
     async def leave_server(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> None:
         server = await self.repo.get_server_by_id(db, server_id)
         if not server:
@@ -118,3 +139,30 @@ class ServerService:
 
         items, total = await self.repo.get_members_page(db, server_id, limit, offset)
         return {"items": items, "total": total, "limit": limit, "offset": offset}
+
+    async def get_member_growth(
+        self,
+        db: AsyncSession,
+        server_id: uuid.UUID,
+        user_id: str,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        days: int | None = None,
+    ) -> dict[str, Any]:
+        """Consulta el gráfico de crecimiento de miembros (requiere MANAGE_SERVER, ADMINISTRATOR o dueño)."""
+        await self._get_manageable_server(db, server_id, user_id)
+
+        today = datetime.now(UTC).date()
+        if start_date is not None and end_date is not None:
+            if start_date > end_date:
+                raise UnprocessableEntityError(detail="start_date cannot be after end_date")
+            resolved_start = start_date
+            resolved_end = end_date
+        elif days is not None:
+            resolved_end = today
+            resolved_start = today - timedelta(days=max(0, days - 1))
+        else:
+            resolved_end = today
+            resolved_start = today - timedelta(days=29)
+
+        return await self.repo.get_member_growth(db, server_id, resolved_start, resolved_end)

@@ -47,3 +47,24 @@ class ServerMemberPage(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class MemberGrowthPoint(BaseModel):
+    date: str
+    member_count: int
+    joined: int
+    left: int
+
+
+class MemberGrowthPeriod(BaseModel):
+    start_date: str
+    end_date: str
+    days: int
+
+
+class MemberGrowthResponse(BaseModel):
+    server_id: UUID
+    period: MemberGrowthPeriod
+    current_member_count: int
+    data: list[MemberGrowthPoint]
+
