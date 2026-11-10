@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,7 +22,13 @@ from app.schemas.role import (
     RoleUpdate,
     RoleUpdatePermissions,
 )
-from app.schemas.server import MutualServerResponse, ServerCreate, ServerMemberPage, ServerResponse
+from app.schemas.server import (
+    MemberGrowthResponse,
+    MutualServerResponse,
+    ServerCreate,
+    ServerMemberPage,
+    ServerResponse,
+)
 from app.schemas.server_transfer import ServerTransferCreate, ServerTransferResponse
 from app.services.category import CategoryService
 from app.services.channel import ChannelService
@@ -470,3 +477,33 @@ async def cancel_transfer_endpoint(
 ):
     service = ServerTransferService()
     return await service.cancel_transfer(db, server_id=server_id, user_id=user_id, transfer_id=transfer_id)
+
+
+@router.get(
+    "/servers/{server_id}/metrics/member-growth",
+    response_model=MemberGrowthResponse,
+    status_code=200,
+)
+@router.get(
+    "/servers/{server_id}/member-growth",
+    response_model=MemberGrowthResponse,
+    status_code=200,
+)
+async def get_member_growth_endpoint(
+    server_id: uuid.UUID,
+    days: int | None = Query(default=None, ge=1, le=365),
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = ServerService(ServerRepository())
+    return await service.get_member_growth(
+        db=db,
+        server_id=server_id,
+        user_id=user_id,
+        start_date=start_date,
+        end_date=end_date,
+        days=days,
+    )
+
