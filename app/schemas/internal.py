@@ -37,3 +37,9 @@ class CanConnectResponse(BaseModel):
     can_speak: bool
     can_video: bool
     can_screen_share: bool
+
+
+class ServerMemberIdsResponse(BaseModel):
+    server_id: str
+    # Ids de usuario de todos los miembros, incluido el dueño
+    user_ids: list[str]
