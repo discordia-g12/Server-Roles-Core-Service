@@ -151,3 +151,20 @@ class ServerRepository:
             for member in members
         ]
         return items, total or 0
+
+    async def delete_server(self, db: AsyncSession, server: Server) -> list[uuid.UUID]:
+        channel_ids_stmt = select(Channel.id).where(Channel.server_id == server.id)
+        channel_ids = list((await db.execute(channel_ids_stmt)).scalars().all())
+
+        add_outbox_event(
+            db,
+            "server.deleted",
+            {
+                "server_id": str(server.id),
+                "channel_ids": [str(cid) for cid in channel_ids],
+                "owner_id": server.owner_id,
+            },
+        )
+        await db.delete(server)
+        await db.commit()
+        return channel_ids
