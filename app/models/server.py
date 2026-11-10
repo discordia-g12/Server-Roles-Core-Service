@@ -26,8 +26,18 @@ class Server(Base):
     updated_at: Mapped[datetime | None] = mapped_column(onupdate=func.now(), nullable=True)
 
     channels: Mapped[list["Channel"]] = relationship(
-        "Channel", lazy="selectin", order_by="Channel.position", viewonly=False, cascade="all, delete", passive_deletes=True
+        "Channel",
+        lazy="selectin",
+        order_by="Channel.position",
+        viewonly=False,
+        cascade="all, delete",
+        passive_deletes=True,
     )
     categories: Mapped[list["Category"]] = relationship(
-        "Category", lazy="selectin", order_by="Category.position", viewonly=False, cascade="all, delete", passive_deletes=True
+        "Category",
+        lazy="selectin",
+        order_by="Category.position",
+        viewonly=False,
+        cascade="all, delete",
+        passive_deletes=True,
     )

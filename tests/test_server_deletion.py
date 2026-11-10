@@ -83,16 +83,20 @@ def test_delete_server_success_ca1():
             s = await db.scalar(select(Server).where(Server.id == uuid.UUID(server_id)))
             assert s is None
 
-            channels = list((await db.execute(select(Channel).where(Channel.server_id == uuid.UUID(server_id)))).scalars().all())
+            stmt_channels = select(Channel).where(Channel.server_id == uuid.UUID(server_id))
+            channels = list((await db.execute(stmt_channels)).scalars().all())
             assert len(channels) == 0
 
-            roles = list((await db.execute(select(Role).where(Role.server_id == uuid.UUID(server_id)))).scalars().all())
+            stmt_roles = select(Role).where(Role.server_id == uuid.UUID(server_id))
+            roles = list((await db.execute(stmt_roles)).scalars().all())
             assert len(roles) == 0
 
-            categories = list((await db.execute(select(Category).where(Category.server_id == uuid.UUID(server_id)))).scalars().all())
+            stmt_categories = select(Category).where(Category.server_id == uuid.UUID(server_id))
+            categories = list((await db.execute(stmt_categories)).scalars().all())
             assert len(categories) == 0
 
-            members = list((await db.execute(select(ServerMember).where(ServerMember.server_id == uuid.UUID(server_id)))).scalars().all())
+            stmt_members = select(ServerMember).where(ServerMember.server_id == uuid.UUID(server_id))
+            members = list((await db.execute(stmt_members)).scalars().all())
             assert len(members) == 0
 
             # Outbox event server.deleted generado
@@ -158,8 +162,10 @@ def test_delete_server_deletes_icon_from_storage():
     owner_id = str(uuid.uuid4())
     headers = {"x-user-id": owner_id}
 
-    with patch("app.services.storage.upload_image", return_value="https://test.s3.amazonaws.com/server-icons/test.webp"), \
-         patch("app.services.storage.delete_image") as mock_delete:
+    with (
+        patch("app.services.storage.upload_image", return_value="https://test.s3.amazonaws.com/server-icons/test.webp"),
+        patch("app.services.storage.delete_image") as mock_delete,
+    ):
         # Creamos servidor con ícono
         files = {"icon": ("icon.png", _png("red"), "image/png")}
         create_res = client.post("/api/v1/servers", data={"name": "Server Con Icono"}, files=files, headers=headers)
