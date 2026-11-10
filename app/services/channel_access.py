@@ -231,6 +231,7 @@ class ChannelAccessService:
             | Permission.BAN_MEMBERS.value
             | Permission.KICK_MEMBERS.value
             | Permission.MUTE_MEMBERS.value
+            | Permission.VIEW_AUDIT_LOG.value
         )
         can_moderate = bool(permissions_bitmask & moderation_bits)
         return ServerPermissionsResponse(
