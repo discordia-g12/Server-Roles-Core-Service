@@ -28,6 +28,7 @@ from app.schemas.server import (
     ServerCreate,
     ServerMemberPage,
     ServerResponse,
+    ServerUpdate,
 )
 from app.schemas.server_transfer import ServerTransferCreate, ServerTransferResponse
 from app.services.category import CategoryService
@@ -75,6 +76,19 @@ async def create_server_endpoint(
     return created_server
 
 
+@router.patch("/servers/{server_id}", response_model=ServerResponse, status_code=200)
+async def update_server_endpoint(
+    server_id: uuid.UUID,
+    server_data: ServerUpdate,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Cambia nombre y/o descripción (JSON, solo los campos que se mandan). 403 sin MANAGE_SERVER,
+    422 con datos inválidos (y no se guarda nada)."""
+    service = ServerService(ServerRepository())
+    return await service.update_server(db, server_id=server_id, user_id=user_id, data=server_data)
+
+
 @router.put("/servers/{server_id}/icon", response_model=ServerResponse, status_code=200)
 async def update_server_icon_endpoint(
     server_id: uuid.UUID,
@@ -96,6 +110,29 @@ async def remove_server_icon_endpoint(
     """Quita el ícono. Devuelve el servidor sin ícono."""
     service = ServerService(ServerRepository())
     return await service.remove_icon(db, server_id=server_id, user_id=user_id)
+
+
+@router.put("/servers/{server_id}/banner", response_model=ServerResponse, status_code=200)
+async def update_server_banner_endpoint(
+    server_id: uuid.UUID,
+    banner: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Reemplaza el banner (multipart, campo "banner"). Devuelve el servidor con la URL nueva."""
+    service = ServerService(ServerRepository())
+    return await service.update_banner(db, server_id=server_id, user_id=user_id, banner=banner)
+
+
+@router.delete("/servers/{server_id}/banner", response_model=ServerResponse, status_code=200)
+async def remove_server_banner_endpoint(
+    server_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Quita el banner. Devuelve el servidor sin banner."""
+    service = ServerService(ServerRepository())
+    return await service.remove_banner(db, server_id=server_id, user_id=user_id)
 
 
 @router.get("/servers/{server_id}/members", response_model=ServerMemberPage, status_code=200)

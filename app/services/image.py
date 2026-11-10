@@ -1,4 +1,4 @@
-"""Validación y normalización de imágenes subidas (íconos de servidor)."""
+"""Validación y normalización de imágenes subidas (ícono y banner de servidor)."""
 
 import io
 
@@ -9,11 +9,14 @@ from app.exceptions import BadRequestError
 MAX_FILE_SIZE = 5 * 1024 * 1024
 MAX_PIXELS = 4096 * 4096  # un PNG chico puede descomprimir a miles de megapíxeles
 ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP"}
-OUTPUT_SIZE = 256
+ICON_SIZE = (256, 256)
+# 16:9, el doble de lo que ocupa arriba de la lista de canales: se ve nítido en pantallas de alta densidad
+BANNER_SIZE = (960, 540)
 
 
-def normalize_image(contents: bytes) -> bytes:
-    """Valida que sea una imagen JPEG/PNG/WebP de hasta 5 MB y la devuelve como WebP cuadrado de 256 px.
+def normalize_image(contents: bytes, output_size: tuple[int, int] = ICON_SIZE) -> bytes:
+    """Valida que sea una imagen JPEG/PNG/WebP de hasta 5 MB y la devuelve como WebP de `output_size`
+    (recortada al centro si la proporción no coincide). Por defecto, el ícono: cuadrado de 256 px.
 
     Se valida el contenido real del archivo, no el Content-Type que manda el cliente. Recodificar
     además descarta los metadatos (EXIF con ubicación) y cualquier cosa escondida en el archivo.
@@ -41,7 +44,7 @@ def normalize_image(contents: bytes) -> bytes:
         with Image.open(io.BytesIO(contents)) as image:
             image = ImageOps.exif_transpose(image)
             image = image.convert("RGBA" if image.mode in ("RGBA", "LA", "P") else "RGB")
-            image = ImageOps.fit(image, (OUTPUT_SIZE, OUTPUT_SIZE), Image.Resampling.LANCZOS)
+            image = ImageOps.fit(image, output_size, Image.Resampling.LANCZOS)
 
             output = io.BytesIO()
             image.save(output, format="WEBP", quality=85)
