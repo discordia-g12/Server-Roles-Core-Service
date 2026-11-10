@@ -46,3 +46,8 @@ class ServerPermissionsResponse(BaseModel):
     can_moderate: bool
     permissions_bitmask: int
 
+
+class ServerMemberIdsResponse(BaseModel):
+    server_id: str
+    # Ids de usuario de todos los miembros, incluido el dueño
+    user_ids: list[str]

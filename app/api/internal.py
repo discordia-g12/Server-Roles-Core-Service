@@ -4,14 +4,17 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.repositories.server import ServerRepository
 from app.schemas.internal import (
     CanConnectResponse,
     CanSendResponse,
     ChannelAccessResponse,
+    ServerMemberIdsResponse,
     ServerPermissionsResponse,
     VisibleChannelsResponse,
 )
 from app.services.channel_access import ChannelAccessService
+from app.services.server import ServerService
 
 # Endpoints que consultan Chat y Voice (nodo realtime) por el puerto 8002. No pasan por Kong.
 router = APIRouter(prefix="/internal", tags=["internal"])
@@ -58,6 +61,17 @@ async def can_connect(
     return await ChannelAccessService().check_can_connect(db, channel_id, user_id)
 
 
+@router.get("/servers/{server_id}/member-ids", response_model=ServerMemberIdsResponse, status_code=200)
+async def server_member_ids(
+    server_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Chat: a quién avisarle por el inbox que cambió la configuración del servidor (server.updated).
+    404 si el servidor no existe."""
+    user_ids = await ServerService(ServerRepository()).get_member_user_ids(db, server_id)
+    return {"server_id": str(server_id), "user_ids": user_ids}
+
+
 @router.get(
     "/servers/{server_id}/members/{user_id}/permissions",
     response_model=ServerPermissionsResponse,
@@ -70,4 +84,3 @@ async def server_member_permissions(
 ):
     """Notification-Audit-Metrics: verificar si un usuario tiene permisos de moderación en el servidor."""
     return await ChannelAccessService().get_server_permissions(db, server_id, user_id)
-
