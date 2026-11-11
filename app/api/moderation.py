@@ -4,11 +4,12 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_id
+from app.api.guards import reject_suspended_server
 from app.db.session import get_db
 from app.schemas.moderation import BanCreate, BanResponse, MuteCreate, MuteResponse
 from app.services.moderation import ModerationService
 
-router = APIRouter(prefix="/api/v1", tags=["moderation"])
+router = APIRouter(prefix="/api/v1", tags=["moderation"], dependencies=[Depends(reject_suspended_server)])
 
 
 @router.post("/servers/{server_id}/bans", response_model=BanResponse, status_code=status.HTTP_201_CREATED)

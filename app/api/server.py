@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_id
+from app.api.guards import reject_suspended_server
 from app.db.session import get_db
 from app.repositories.category import CategoryRepository
 from app.repositories.channel import ChannelRepository
@@ -29,6 +30,7 @@ from app.schemas.server import (
     ServerMemberPage,
     ServerResponse,
     ServerUpdate,
+    member_server_view,
 )
 from app.schemas.server_transfer import ServerTransferCreate, ServerTransferResponse
 from app.services.category import CategoryService
@@ -38,7 +40,8 @@ from app.services.role import RoleService
 from app.services.server import ServerService
 from app.services.server_transfer import ServerTransferService
 
-router = APIRouter(prefix="/api/v1", tags=["servers"])
+# Toda ruta con {server_id} pasa por reject_suspended_server: un servidor suspendido no se puede usar (ADR-002)
+router = APIRouter(prefix="/api/v1", tags=["servers"], dependencies=[Depends(reject_suspended_server)])
 
 
 @router.get("/servers", response_model=list[ServerResponse], status_code=200)
@@ -47,7 +50,7 @@ async def get_user_servers_endpoint(
     user_id: str = Depends(get_current_user_id),
 ):
     service = ServerService(ServerRepository())
-    return await service.get_user_servers(db, user_id)
+    return [member_server_view(server) for server in await service.get_user_servers(db, user_id)]
 
 
 # Va antes de las rutas /servers/{server_id}/...: "mutual" no es un id de servidor.

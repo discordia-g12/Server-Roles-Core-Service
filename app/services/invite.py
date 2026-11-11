@@ -8,7 +8,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import Permission
+from app.exceptions import ServerSuspendedError
 from app.models.role_assignment import RoleAssignment
+from app.models.server import Server
 from app.models.server_invite import ServerInvite
 from app.models.server_member import ServerMember
 from app.repositories.invite import InviteRepository
@@ -178,6 +180,11 @@ class InviteService:
         invite_preview = await self.repository.get_invite_by_code(db, code)
         if invite_preview and await self.repository.is_user_banned(db, invite_preview.server_id, user_id):
             raise HTTPException(status_code=403, detail="You are banned from this server.")
+        # Un servidor suspendido no suma miembros (ADR-002): la invitación vuelve a servir al levantarse
+        if invite_preview and await db.scalar(
+            select(Server.suspended_at).where(Server.id == invite_preview.server_id)
+        ) is not None:
+            raise ServerSuspendedError()
 
         invite = await self.validate_and_use_invite(db, code)
 

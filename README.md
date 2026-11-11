@@ -107,14 +107,20 @@ contrato completo lo genera FastAPI: `http://localhost:8080/docs` y `/openapi.js
 | Moderación | `POST`, `GET` y `DELETE /servers/{id}/bans`; `POST` y `DELETE /servers/{id}/mutes` |
 | Invitaciones | `POST /servers/{id}/invites`, `DELETE /servers/{id}/invites/{code}`, `GET /invites/{code}` (vista previa), `POST /invites/{code}/join` |
 | Transferir propiedad | `POST /servers/{id}/transfers`, `GET .../transfers/pending`, y aceptar, rechazar o cancelar |
+| Backoffice (**solo staff**, `X-User-Role: staff`; si no, `403 staff-only`) | `GET /admin/servers?q=&state=&page=&page_size=` (`state`: `all`, `active` o `suspended`) (listado: búsqueda por nombre parcial o id exacto, con id, miembros, creación y estado), `POST /admin/servers/{id}/suspension` (`{"reason": ...}`; `404` si no existe, `409` si ya estaba suspendido), `DELETE /admin/servers/{id}/suspension` (levantarla), `GET /admin/servers/suspended` ([ADR-002](docs/ADR-002-Suspension-de-Servidores.md)) |
 | Salud | `GET /livez` (sin I/O) y `GET /readyz` (verifica la base) |
+
+**Servidores suspendidos** ([ADR-002](docs/ADR-002-Suspension-de-Servidores.md)): toda ruta `/servers/{id}/...`
+responde `403` con `type` `https://discordia.app/problems/server-suspended`, para cualquier miembro, incluido el dueño.
+Solo se puede salir (`DELETE /servers/{id}/leave`). `GET /servers` lo sigue listando, con `is_suspended: true` y sin
+canales ni categorías. Unirse con una invitación también da `403`.
 
 **Endpoints internos** (`/internal`, sin prefijo de versión). Los usan Chat y Voice y **no pasan por Kong**.
 Hoy no tienen autenticación: solo se llega a ellos por la red entre nodos.
 
 | Ruta | Quién la usa | Devuelve |
 |---|---|---|
-| `GET /internal/channels/{id}/access?user_id=` | Chat, al abrir el WebSocket, al pedir el historial, al enviar un mensaje con `@everyone` o una mención de rol, al borrar mensajes o al reaccionar con emojis | `403` si no puede ver el canal; si puede, `server_id`, `can_send`, `muted_until`, `can_mention_everyone` (MENTION_EVERYONE), `mentionable_role_ids`, `can_manage_messages` (MANAGE_MESSAGES) y `can_add_reactions` (ADD_REACTIONS) |
+| `GET /internal/channels/{id}/access?user_id=` | Chat, al abrir el WebSocket, al pedir el historial, al enviar un mensaje con `@everyone` o una mención de rol, al borrar mensajes o al reaccionar con emojis | `403` si no puede ver el canal o el servidor está suspendido (`server-suspended`); si puede, `server_id`, `can_send`, `muted_until`, `can_mention_everyone` (MENTION_EVERYONE), `mentionable_role_ids` (roles del servidor sin el por defecto; vacío sin ese permiso), `can_manage_messages` (MANAGE_MESSAGES) y `can_add_reactions` (ADD_REACTIONS) |
 | `GET /internal/users/{id}/visible-channels` | Chat, para los no leídos y las menciones (`GET /unread`) | `channel_ids`: canales de texto con VIEW_CHANNELS en todos sus servidores; `role_ids`: sus roles, sin los por defecto |
 | `GET /internal/servers/{id}/member-ids` | Chat, al recibir `server.updated`, para avisar a los miembros por el inbox | `user_ids` de todos los miembros; `404` si el servidor no existe |
 | `GET /internal/channels/{id}/can-connect?user_id=` | Voice, al unirse a una llamada | Si puede entrar y qué puede publicar (micrófono, cámara, pantalla) |
@@ -137,12 +143,14 @@ Exchange `server.events` (topic). La routing key es el tipo de evento:
   mismo para `category.*`;
 - roles: `role.permissions_updated` y `role.deleted`;
 - miembros: `member.role_assigned`, `member.role_removed`, `member.left`, `member.kicked`,
-  `member.banned`, `member.unbanned`, `member.muted` y `member.unmuted`.
+  `member.banned`, `member.unbanned`, `member.muted` y `member.unmuted`;
+- servidor: `server.suspended` (con `server_id`, `voice_channel_ids`, `reason`, `suspended_by`, `suspended_at`) y
+  `server.unsuspended`.
 
-Chat-Engine consume `member.*` (cierra sesiones, habilita o bloquea el envío) y `server.updated` (avisa a los
-miembros por su inbox, ADR 0013 de `org-docs`), y Voice-Signaling consume
-`member.banned`, `member.kicked` y `member.left` (saca de la llamada).
-
+Chat-Engine consume `member.*` (cierra sesiones, habilita o bloquea el envío), `server.updated` (avisa a los
+miembros por su inbox, ADR 0013 de `org-docs`) y `server.suspended` (cierra las sesiones del servidor).
+Voice-Signaling consume `member.banned`, `member.kicked` y `member.left` (saca de la llamada) y
+`server.suspended` / `server.unsuspended`.
 ## Tests, lint y seguridad
 
 Los mismos comandos que corre el CI:
@@ -223,3 +231,4 @@ La imagen arranca solo uvicorn (`CMD` del `Dockerfile`): las migraciones las cor
 | ADR | Tema |
 |-----|------|
 | [ADR-001](docs/ADR-001-Permissions-Bitmask.md) | Permisos como bitmask y no como modelo relacional puro |
+| [ADR-002](docs/ADR-002-Suspension-de-Servidores.md) | Suspensión de servidores por el staff: solo por id, bloqueo a nivel router, eventos y cartel "suspended" |

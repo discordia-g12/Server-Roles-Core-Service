@@ -1,6 +1,7 @@
 from fastapi import FastAPI, Response, status
 from sqlalchemy import text
 
+from app.api.admin import router as admin_router
 from app.api.internal import router as internal_router
 from app.api.moderation import router as moderation_router
 from app.api.server import router as server_router
@@ -14,6 +15,7 @@ register_exception_handlers(app)
 app.include_router(server_router)
 app.include_router(moderation_router)
 app.include_router(internal_router)
+app.include_router(admin_router)
 
 @app.get("/")
 def read_root():
