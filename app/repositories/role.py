@@ -114,6 +114,8 @@ class RoleRepository:
                 "server_id": str(role.server_id),
                 "role_id": str(role.id),
                 "name": role.name,
+                "old_permissions": old_permissions_bitmask,
+                "new_permissions": new_permissions_bitmask,
                 "old_permissions_bitmask": old_permissions_bitmask,
                 "new_permissions_bitmask": new_permissions_bitmask,
                 "updated_by": updated_by,
