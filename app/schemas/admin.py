@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -29,3 +30,15 @@ class AdminServerResponse(BaseModel):
     suspended_at: datetime | None = None
     suspended_by: str | None = None
     suspension_reason: str | None = None
+
+
+ServerStateFilter = Literal["all", "active", "suspended"]
+
+
+class AdminServerPage(BaseModel):
+    """A page of the platform's servers ("Ver listado de servidores de la plataforma")."""
+
+    items: list[AdminServerResponse]
+    total: int = Field(..., description="Servers matching the filters, across all pages")
+    page: int
+    page_size: int

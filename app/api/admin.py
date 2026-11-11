@@ -1,11 +1,12 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_staff
 from app.db.session import get_db
-from app.schemas.admin import AdminServerResponse, SuspendServerRequest
+from app.schemas.admin import AdminServerPage, AdminServerResponse, ServerStateFilter, SuspendServerRequest
+from app.services.server_directory import ServerDirectoryService
 from app.services.server_suspension import ServerSuspensionService
 
 # Backoffice (solo staff). Kong exige validate("staff") en /api/v1/admin/servers y acá se vuelve a chequear el
@@ -13,6 +14,20 @@ from app.services.server_suspension import ServerSuspensionService
 # suspendidos.
 router = APIRouter(prefix="/api/v1/admin/servers", tags=["backoffice: servers"])
 service = ServerSuspensionService()
+directory = ServerDirectoryService()
+
+
+@router.get("", response_model=AdminServerPage, status_code=status.HTTP_200_OK)
+async def list_servers(
+    q: str | None = Query(None, max_length=100, description="Name (partial, case-insensitive) or exact server id"),
+    state: ServerStateFilter = Query("all"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    _staff: str = Depends(require_staff),
+):
+    """Servidores de la plataforma, el más nuevo primero, con su id, miembros, fecha de creación y estado."""
+    return await directory.list_servers(db, query=q, state=state, page=page, page_size=page_size)
 
 
 @router.get("/suspended", response_model=list[AdminServerResponse], status_code=status.HTTP_200_OK)

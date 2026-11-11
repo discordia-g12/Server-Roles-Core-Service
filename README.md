@@ -105,7 +105,7 @@ contrato completo lo genera FastAPI: `http://localhost:8080/docs` y `/openapi.js
 | Moderación | `POST`, `GET` y `DELETE /servers/{id}/bans`; `POST` y `DELETE /servers/{id}/mutes` |
 | Invitaciones | `POST /servers/{id}/invites`, `DELETE /servers/{id}/invites/{code}`, `GET /invites/{code}` (vista previa), `POST /invites/{code}/join` |
 | Transferir propiedad | `POST /servers/{id}/transfers`, `GET .../transfers/pending`, y aceptar, rechazar o cancelar |
-| Backoffice (**solo staff**, `X-User-Role: staff`; si no, `403 staff-only`) | `POST /admin/servers/{id}/suspension` (`{"reason": ...}`; `404` si no existe, `409` si ya estaba suspendido), `DELETE /admin/servers/{id}/suspension` (levantarla), `GET /admin/servers/suspended` ([ADR-002](docs/ADR-002-Suspension-de-Servidores.md)) |
+| Backoffice (**solo staff**, `X-User-Role: staff`; si no, `403 staff-only`) | `GET /admin/servers?q=&state=&page=&page_size=` (`state`: `all`, `active` o `suspended`) (listado: búsqueda por nombre parcial o id exacto, con id, miembros, creación y estado), `POST /admin/servers/{id}/suspension` (`{"reason": ...}`; `404` si no existe, `409` si ya estaba suspendido), `DELETE /admin/servers/{id}/suspension` (levantarla), `GET /admin/servers/suspended` ([ADR-002](docs/ADR-002-Suspension-de-Servidores.md)) |
 | Salud | `GET /livez` (sin I/O) y `GET /readyz` (verifica la base) |
 
 **Servidores suspendidos** ([ADR-002](docs/ADR-002-Suspension-de-Servidores.md)): toda ruta `/servers/{id}/...`
