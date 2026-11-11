@@ -85,13 +85,15 @@ class ServerService:
             return await self._with_my_permissions(db, server, user_id)
 
         try:
-            updated = await self.repo.update_server(db, server, changes)
+            updated = await self.repo.update_server(db, server, changes, updated_by=user_id)
         except Exception:
             await db.rollback()
             raise
         return await self._with_my_permissions(db, updated, user_id)
 
-    async def _replace_image(self, db: AsyncSession, server, file: UploadFile, field: str, prefix: str, size, save):
+    async def _replace_image(
+        self, db: AsyncSession, server, file: UploadFile, field: str, prefix: str, size, save, user_id: str
+    ):
         """Sube la imagen nueva, la guarda y recién después borra la anterior. Si falla la base, borra la que
         subió (no la referencia nadie) y el servidor queda como estaba."""
         previous_url = getattr(server, field)
@@ -99,7 +101,7 @@ class ServerService:
         image = normalize_image(await file.read(), size)
         new_url = await asyncio.to_thread(storage.upload_image, image, prefix)
         try:
-            updated = await save(db, server, new_url)
+            updated = await save(db, server, new_url, updated_by=user_id)
         except Exception:
             await db.rollback()
             await asyncio.to_thread(storage.delete_image, new_url)
@@ -109,40 +111,42 @@ class ServerService:
             await asyncio.to_thread(storage.delete_image, previous_url)
         return updated
 
-    async def _remove_image(self, db: AsyncSession, server, field: str, save):
+    async def _remove_image(self, db: AsyncSession, server, field: str, save, user_id: str):
         """Quita la imagen y borra el archivo. Sin imagen no hace nada (ni emite el evento)."""
         previous_url = getattr(server, field)
         if previous_url is None:
             return server
 
-        updated = await save(db, server, None)
+        updated = await save(db, server, None, updated_by=user_id)
         await asyncio.to_thread(storage.delete_image, previous_url)
         return updated
 
     async def update_icon(self, db: AsyncSession, server_id: uuid.UUID, user_id: str, icon: UploadFile):
         """Reemplaza el ícono (cuadrado de 256 px)."""
         server = await self._get_manageable_server(db, server_id, user_id)
-        updated = await self._replace_image(db, server, icon, "icon_url", ICONS_PREFIX, ICON_SIZE, self.repo.set_icon)
+        updated = await self._replace_image(
+            db, server, icon, "icon_url", ICONS_PREFIX, ICON_SIZE, self.repo.set_icon, user_id
+        )
         return await self._with_my_permissions(db, updated, user_id)
 
     async def remove_icon(self, db: AsyncSession, server_id: uuid.UUID, user_id: str):
         """Quita el ícono (el servidor vuelve a mostrar sus iniciales) y borra el archivo."""
         server = await self._get_manageable_server(db, server_id, user_id)
-        updated = await self._remove_image(db, server, "icon_url", self.repo.set_icon)
+        updated = await self._remove_image(db, server, "icon_url", self.repo.set_icon, user_id)
         return await self._with_my_permissions(db, updated, user_id)
 
     async def update_banner(self, db: AsyncSession, server_id: uuid.UUID, user_id: str, banner: UploadFile):
         """Reemplaza el banner (16:9, 960x540)."""
         server = await self._get_manageable_server(db, server_id, user_id)
         updated = await self._replace_image(
-            db, server, banner, "banner_url", BANNERS_PREFIX, BANNER_SIZE, self.repo.set_banner
+            db, server, banner, "banner_url", BANNERS_PREFIX, BANNER_SIZE, self.repo.set_banner, user_id
         )
         return await self._with_my_permissions(db, updated, user_id)
 
     async def remove_banner(self, db: AsyncSession, server_id: uuid.UUID, user_id: str):
         """Quita el banner y borra el archivo."""
         server = await self._get_manageable_server(db, server_id, user_id)
-        updated = await self._remove_image(db, server, "banner_url", self.repo.set_banner)
+        updated = await self._remove_image(db, server, "banner_url", self.repo.set_banner, user_id)
         return await self._with_my_permissions(db, updated, user_id)
 
     async def get_member_user_ids(self, db: AsyncSession, server_id: uuid.UUID) -> list[str]:

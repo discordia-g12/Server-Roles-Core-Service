@@ -95,23 +95,40 @@ class ServerRepository:
         )
         return list((await db.execute(stmt)).scalars().all())
 
-    async def update_server(self, db: AsyncSession, server: Server, changes: dict[str, Any]) -> Server:
+    async def update_server(
+        self, db: AsyncSession, server: Server, changes: dict[str, Any], updated_by: str | None = None
+    ) -> Server:
         """Guarda los cambios de configuración (nombre, descripción, ícono, banner) y avisa con server.updated
-        en el mismo commit. El evento lleva solo el id: cada cliente vuelve a pedir el servidor."""
+        en el mismo commit."""
+        detailed_changes = {}
         for field, value in changes.items():
+            detailed_changes[field] = {"old": getattr(server, field), "new": value}
             setattr(server, field, value)
-        add_outbox_event(db, "server.updated", {"server_id": str(server.id)})
+        add_outbox_event(
+            db,
+            "server.updated",
+            {
+                "server_id": str(server.id),
+                "name": server.name,
+                "changes": detailed_changes,
+                "updated_by": updated_by,
+            },
+        )
         await db.commit()
         await db.refresh(server, attribute_names=["channels", "categories"])
         return server
 
-    async def set_icon(self, db: AsyncSession, server: Server, icon_url: str | None) -> Server:
+    async def set_icon(
+        self, db: AsyncSession, server: Server, icon_url: str | None, updated_by: str | None = None
+    ) -> Server:
         """Guarda el ícono nuevo (o None para quitarlo)."""
-        return await self.update_server(db, server, {"icon_url": icon_url})
+        return await self.update_server(db, server, {"icon_url": icon_url}, updated_by=updated_by)
 
-    async def set_banner(self, db: AsyncSession, server: Server, banner_url: str | None) -> Server:
+    async def set_banner(
+        self, db: AsyncSession, server: Server, banner_url: str | None, updated_by: str | None = None
+    ) -> Server:
         """Guarda el banner nuevo (o None para quitarlo)."""
-        return await self.update_server(db, server, {"banner_url": banner_url})
+        return await self.update_server(db, server, {"banner_url": banner_url}, updated_by=updated_by)
 
     async def get_member_user_ids(self, db: AsyncSession, server_id: uuid.UUID) -> list[str]:
         """Ids de todos los miembros (para avisarles por el inbox de Chat). Sin paginar: es interno."""

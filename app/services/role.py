@@ -41,7 +41,7 @@ class RoleService:
 
     async def create_role(self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_data: RoleCreate):
         await self._require_manage_permission(db, server_id, user_id)
-        return await self.repo.create_role(db, server_id, role_data.name, role_data.color)
+        return await self.repo.create_role(db, server_id, role_data.name, role_data.color, created_by=user_id)
 
     async def delete_role(self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_id: uuid.UUID):
         await self._require_manage_permission(db, server_id, user_id)
@@ -50,7 +50,7 @@ class RoleService:
         if role.is_default:
             raise HTTPException(status_code=400, detail="Cannot delete the default server role.")
 
-        await self.repo.delete_role(db, role)
+        await self.repo.delete_role(db, role, deleted_by=user_id)
 
     async def update_role_permissions(
         self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_id: uuid.UUID, new_permissions_bitmask: int
@@ -66,7 +66,7 @@ class RoleService:
                 raise HTTPException(
                     status_code=403, detail="You cannot remove the ADMINISTRATOR permission from your own role"
                 )
-        await self.repo.update_role_permissions(db, role, new_permissions_bitmask)
+        await self.repo.update_role_permissions(db, role, new_permissions_bitmask, updated_by=user_id)
         return role
 
     async def get_members_by_role(self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_id: uuid.UUID):
@@ -81,7 +81,9 @@ class RoleService:
         await self._get_role(db, server_id, role_id)
         member = await self._get_member(db, server_id, target_user_id)
 
-        await self.repo.assign_role(db, member.id, role_id, server_id=server_id, user_id=target_user_id)
+        await self.repo.assign_role(
+            db, member.id, role_id, server_id=server_id, user_id=target_user_id, assigned_by=user_id
+        )
 
     async def remove_role_from_member(
         self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_id: uuid.UUID, target_user_id: str
@@ -91,7 +93,7 @@ class RoleService:
         member = await self._get_member(db, server_id, target_user_id)
 
         removed = await self.repo.remove_role_assignment(
-            db, member.id, role_id, server_id=server_id, user_id=target_user_id
+            db, member.id, role_id, server_id=server_id, user_id=target_user_id, removed_by=user_id
         )
         if not removed:
             raise HTTPException(status_code=404, detail="Member does not have this role assigned.")
@@ -108,7 +110,7 @@ class RoleService:
         role = await self._get_role(db, server_id, role_id)
         if role.is_default and update_data.name is not None and update_data.name != role.name:
             raise HTTPException(status_code=400, detail="Cannot change the name of the default server role.")
-        return await self.repo.update_role(db, role, update_data.name, update_data.color)
+        return await self.repo.update_role(db, role, update_data.name, update_data.color, updated_by=user_id)
 
     async def reorder_roles(
         self, db: AsyncSession, server_id: uuid.UUID, user_id: str, reorder_data: RoleReorder

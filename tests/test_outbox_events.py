@@ -120,6 +120,7 @@ async def test_member_moderation_writes_outbox_events(db_session):
     assert unmute_res.status_code == 204
     events = await events_for_server(db_session, "member.unmuted", server_id)
     assert len(events) == 1
+    assert events[0].payload["unmuted_by"] == owner_id
 
     ban_res = client.post(
         f"/api/v1/servers/{server_id}/bans",
@@ -135,6 +136,7 @@ async def test_member_moderation_writes_outbox_events(db_session):
     assert unban_res.status_code == 204
     events = await events_for_server(db_session, "member.unbanned", server_id)
     assert len(events) == 1
+    assert events[0].payload["unbanned_by"] == owner_id
 
 
 @pytest.mark.anyio
@@ -184,6 +186,10 @@ async def test_role_lifecycle_writes_outbox_events(db_session):
     assert role_res.status_code == 201
     role_id = role_res.json()["id"]
 
+    role_created_events = await events_for_server(db_session, "role.created", server_id)
+    assert len(role_created_events) == 1
+    assert role_created_events[0].payload["created_by"] == owner_id
+
     patch_res = client.patch(
         f"/api/v1/servers/{server_id}/roles/{role_id}/permissions",
         json={"new_permissions_bitmask": 1024},
@@ -192,6 +198,7 @@ async def test_role_lifecycle_writes_outbox_events(db_session):
     assert patch_res.status_code == 200
     events = await events_for_server(db_session, "role.permissions_updated", server_id)
     assert len(events) == 1
+    assert events[0].payload["updated_by"] == owner_id
 
     assign_res = client.put(
         f"/api/v1/servers/{server_id}/roles/{role_id}/members/{member_user_id}",
@@ -200,6 +207,7 @@ async def test_role_lifecycle_writes_outbox_events(db_session):
     assert assign_res.status_code == 204
     events = await events_for_server(db_session, "member.role_assigned", server_id)
     assert len(events) == 1
+    assert events[0].payload["assigned_by"] == owner_id
 
     remove_res = client.delete(
         f"/api/v1/servers/{server_id}/roles/{role_id}/members/{member_user_id}",
@@ -208,8 +216,39 @@ async def test_role_lifecycle_writes_outbox_events(db_session):
     assert remove_res.status_code == 204
     events = await events_for_server(db_session, "member.role_removed", server_id)
     assert len(events) == 1
+    assert events[0].payload["removed_by"] == owner_id
 
     delete_res = client.delete(f"/api/v1/servers/{server_id}/roles/{role_id}", headers=headers)
     assert delete_res.status_code == 204
     events = await events_for_server(db_session, "role.deleted", server_id)
     assert len(events) == 1
+    assert events[0].payload["deleted_by"] == owner_id
+
+
+@pytest.mark.anyio
+async def test_invite_lifecycle_writes_outbox_events(db_session):
+    owner_id = str(uuid.uuid4())
+    headers = {"x-user-id": owner_id}
+    server_id = create_test_server(owner_id)
+
+    create_res = client.post(
+        f"/api/v1/servers/{server_id}/invites",
+        json={"max_uses": 5, "expires_in_seconds": 3600},
+        headers=headers,
+    )
+    assert create_res.status_code == 201
+    code = create_res.json()["code"]
+
+    created_events = await events_for_server(db_session, "invite.created", server_id)
+    assert len(created_events) == 1
+    assert created_events[0].payload["created_by"] == owner_id
+    assert created_events[0].payload["code"] == code
+
+    revoke_res = client.delete(f"/api/v1/servers/{server_id}/invites/{code}", headers=headers)
+    assert revoke_res.status_code == 204
+
+    revoked_events = await events_for_server(db_session, "invite.revoked", server_id)
+    assert len(revoked_events) == 1
+    assert revoked_events[0].payload["revoked_by"] == owner_id
+    assert revoked_events[0].payload["code"] == code
+

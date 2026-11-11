@@ -39,6 +39,14 @@ class CanConnectResponse(BaseModel):
     can_screen_share: bool
 
 
+class ServerPermissionsResponse(BaseModel):
+    server_id: str
+    user_id: str
+    is_owner: bool
+    can_moderate: bool
+    permissions_bitmask: int
+
+
 class ServerMemberIdsResponse(BaseModel):
     server_id: str
     # Ids de usuario de todos los miembros, incluido el dueño

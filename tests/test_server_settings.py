@@ -93,7 +93,7 @@ def test_rename_emits_one_server_updated_event_with_only_the_id():
 
     events = _server_updated_events(server["id"])
     assert len(events) == 1
-    assert events[0].payload == {"server_id": server["id"]}
+    assert events[0].payload["server_id"] == server["id"]
 
 
 def test_patch_only_changes_the_fields_sent():

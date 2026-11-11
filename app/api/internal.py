@@ -10,6 +10,7 @@ from app.schemas.internal import (
     CanSendResponse,
     ChannelAccessResponse,
     ServerMemberIdsResponse,
+    ServerPermissionsResponse,
     VisibleChannelsResponse,
 )
 from app.services.channel_access import ChannelAccessService
@@ -69,3 +70,17 @@ async def server_member_ids(
     404 si el servidor no existe."""
     user_ids = await ServerService(ServerRepository()).get_member_user_ids(db, server_id)
     return {"server_id": str(server_id), "user_ids": user_ids}
+
+
+@router.get(
+    "/servers/{server_id}/members/{user_id}/permissions",
+    response_model=ServerPermissionsResponse,
+    status_code=200,
+)
+async def server_member_permissions(
+    server_id: uuid.UUID,
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Notification-Audit-Metrics: verificar si un usuario tiene permisos de moderación en el servidor."""
+    return await ChannelAccessService().get_server_permissions(db, server_id, user_id)

@@ -36,7 +36,13 @@ class ChannelRepository:
         return (max_pos + 1) if max_pos is not None else 0
 
     async def create_channel(
-        self, db: AsyncSession, server_id: uuid.UUID, name: str, type: str, category_id: uuid.UUID | None
+        self,
+        db: AsyncSession,
+        server_id: uuid.UUID,
+        name: str,
+        type: str,
+        category_id: uuid.UUID | None,
+        created_by: str | None = None,
     ) -> Channel:
         position = await self.get_next_position(db, server_id)
         channel = Channel(
@@ -48,7 +54,18 @@ class ChannelRepository:
         )
         db.add(channel)
         await db.flush()
-        add_outbox_event(db, "channel.created", {"server_id": str(server_id), "channel_id": str(channel.id)})
+        add_outbox_event(
+            db,
+            "channel.created",
+            {
+                "server_id": str(server_id),
+                "channel_id": str(channel.id),
+                "name": channel.name,
+                "type": channel.type,
+                "category_id": str(channel.category_id) if channel.category_id else None,
+                "created_by": created_by,
+            },
+        )
         await db.commit()
         await db.refresh(channel)
         return channel
@@ -103,20 +120,43 @@ class ChannelRepository:
         await db.commit()
         return [channel for channel, _ in ordered]
 
-    async def delete_channel(self, db: AsyncSession, channel: Channel) -> None:
+    async def delete_channel(self, db: AsyncSession, channel: Channel, deleted_by: str | None = None) -> None:
         add_outbox_event(
-            db, "channel.deleted", {"channel_id": str(channel.id), "server_id": str(channel.server_id)}
+            db,
+            "channel.deleted",
+            {
+                "channel_id": str(channel.id),
+                "server_id": str(channel.server_id),
+                "name": channel.name,
+                "type": channel.type,
+                "deleted_by": deleted_by,
+            },
         )
         await db.delete(channel)
         await db.commit()
 
     async def update_channel(
-        self, db: AsyncSession, channel: Channel, update_data: dict
+        self, db: AsyncSession, channel: Channel, update_data: dict, updated_by: str | None = None
     ) -> Channel:
+        changes = {}
         for key, value in update_data.items():
+            old_val = getattr(channel, key)
+            if old_val != value:
+                changes[key] = {
+                    "old": str(old_val) if isinstance(old_val, uuid.UUID) else old_val,
+                    "new": str(value) if isinstance(value, uuid.UUID) else value,
+                }
             setattr(channel, key, value)
         add_outbox_event(
-            db, "channel.updated", {"server_id": str(channel.server_id), "channel_id": str(channel.id)}
+            db,
+            "channel.updated",
+            {
+                "server_id": str(channel.server_id),
+                "channel_id": str(channel.id),
+                "name": channel.name,
+                "changes": changes,
+                "updated_by": updated_by,
+            },
         )
         await db.commit()
         await db.refresh(channel)

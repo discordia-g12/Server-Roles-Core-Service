@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.server import Server
 from app.models.server_member import ServerMember
 from app.models.server_ownership_transfer import ServerOwnershipTransfer
+from app.repositories.outbox import add_outbox_event
 
 
 class ServerTransferRepository:
@@ -77,6 +78,15 @@ class ServerTransferRepository:
     ) -> ServerOwnershipTransfer:
         server.owner_id = new_owner_id
         transfer.status = "ACCEPTED"
+        add_outbox_event(
+            db,
+            "server.ownership_transferred",
+            {
+                "server_id": str(server.id),
+                "previous_owner_id": transfer.sender_id,
+                "new_owner_id": new_owner_id,
+            },
+        )
         await db.commit()
         await db.refresh(transfer)
         await db.refresh(server)
