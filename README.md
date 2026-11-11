@@ -98,7 +98,9 @@ contrato completo lo genera FastAPI: `http://localhost:8080/docs` y `/openapi.js
 | Recurso | Rutas |
 |---|---|
 | Servidores | `POST /servers` (form: `name` y un `icon` opcional), `GET /servers` (los del usuario, con canales, categorías y `my_permissions`), `GET /servers/mutual/{user_id}` (los que comparte con otro usuario, para el perfil público), `DELETE /servers/{id}/leave` |
-| Ícono | `PUT` y `DELETE /servers/{id}/icon` (JPEG, PNG o WebP hasta 5 MB; se guarda en S3 como WebP) |
+| Configuración | `PATCH /servers/{id}` (JSON con `name` y/o `description`; nombre de 1 a 100 caracteres con trim, descripción hasta 1000, vacía la borra; `422` si no es válido). Dueño, Gestionar servidor o Administrador |
+| Ícono | `PUT` y `DELETE /servers/{id}/icon` (JPEG, PNG o WebP hasta 5 MB; se guarda en S3 como WebP de 256×256) |
+| Banner | `PUT` y `DELETE /servers/{id}/banner` (mismas reglas que el ícono; se recorta a 16:9, 960×540, en `server-icons/banners/`) |
 | Canales y categorías | `POST`, `PATCH` y `DELETE` de `/servers/{id}/channels` y `/categories`; `PUT .../channels/order` y `.../categories/order` |
 | Roles | `GET /servers/{id}/roles` (cualquier miembro: los usa la web para mostrar y mencionar roles); `POST /servers/{id}/roles`; `PATCH` (nombre y color), `PATCH .../permissions`, `PATCH .../default` y `DELETE` de `/roles/{role_id}`; `GET .../members`; `PUT` y `DELETE .../members/{user_id}` (asignar y quitar) |
 | Miembros | `GET /servers/{id}/members` (paginado); `DELETE /servers/{id}/members/{user_id}` (expulsar) |
@@ -118,8 +120,9 @@ Hoy no tienen autenticación: solo se llega a ellos por la red entre nodos.
 
 | Ruta | Quién la usa | Devuelve |
 |---|---|---|
-| `GET /internal/channels/{id}/access?user_id=` | Chat, al abrir el WebSocket, al pedir el historial y al enviar un mensaje con `@everyone` o una mención de rol | `403` si no puede ver el canal o el servidor está suspendido (`server-suspended`); si puede, `server_id`, `can_send`, `muted_until`, `can_mention_everyone` (MENTION_EVERYONE) y `mentionable_role_ids` (roles del servidor sin el por defecto; vacío sin ese permiso) |
+| `GET /internal/channels/{id}/access?user_id=` | Chat, al abrir el WebSocket, al pedir el historial, al enviar un mensaje con `@everyone` o una mención de rol, al borrar mensajes o al reaccionar con emojis | `403` si no puede ver el canal o el servidor está suspendido (`server-suspended`); si puede, `server_id`, `can_send`, `muted_until`, `can_mention_everyone` (MENTION_EVERYONE), `mentionable_role_ids` (roles del servidor sin el por defecto; vacío sin ese permiso), `can_manage_messages` (MANAGE_MESSAGES) y `can_add_reactions` (ADD_REACTIONS) |
 | `GET /internal/users/{id}/visible-channels` | Chat, para los no leídos y las menciones (`GET /unread`) | `channel_ids`: canales de texto con VIEW_CHANNELS en todos sus servidores; `role_ids`: sus roles, sin los por defecto |
+| `GET /internal/servers/{id}/member-ids` | Chat, al recibir `server.updated`, para avisar a los miembros por el inbox | `user_ids` de todos los miembros; `404` si el servidor no existe |
 | `GET /internal/channels/{id}/can-connect?user_id=` | Voice, al unirse a una llamada | Si puede entrar y qué puede publicar (micrófono, cámara, pantalla) |
 | `GET /internal/channels/{id}/can-send?user_id=` | Versiones viejas de Chat | Deprecado: reemplazado por `access` |
 
@@ -134,6 +137,8 @@ del canal. El dueño del servidor tiene todos. El catálogo de bits está en la 
 
 Exchange `server.events` (topic). La routing key es el tipo de evento:
 
+- servidor: `server.updated` (`{ server_id }`, al cambiar nombre, descripción, ícono o banner; no se emite si
+  nada cambió) y `server.deleted`;
 - canales y categorías: `channel.created`, `channel.updated`, `channel.deleted`, `channels.reordered` y lo
   mismo para `category.*`;
 - roles: `role.permissions_updated` y `role.deleted`;
@@ -142,10 +147,10 @@ Exchange `server.events` (topic). La routing key es el tipo de evento:
 - servidor: `server.suspended` (con `server_id`, `voice_channel_ids`, `reason`, `suspended_by`, `suspended_at`) y
   `server.unsuspended`.
 
-Chat-Engine consume `member.*` (cierra sesiones, habilita o bloquea el envío) y `server.suspended` (cierra las
-sesiones del servidor). Voice-Signaling consume `member.banned`, `member.kicked` y `member.left` (saca de la llamada) y
+Chat-Engine consume `member.*` (cierra sesiones, habilita o bloquea el envío), `server.updated` (avisa a los
+miembros por su inbox, ADR 0013 de `org-docs`) y `server.suspended` (cierra las sesiones del servidor).
+Voice-Signaling consume `member.banned`, `member.kicked` y `member.left` (saca de la llamada) y
 `server.suspended` / `server.unsuspended`.
-
 ## Tests, lint y seguridad
 
 Los mismos comandos que corre el CI:
@@ -176,7 +181,7 @@ parciales. La URL no está en `alembic.ini`: `alembic/env.py` la arma desde `app
 
 | Tabla | Descripción |
 |---|---|
-| `servers` | Servidor. `owner_id` es el usuario de Auth0, sin FK (otra base). `icon_url` apunta a S3 |
+| `servers` | Servidor. `owner_id` es el usuario de Auth0, sin FK (otra base). `icon_url` y `banner_url` apuntan a S3 |
 | `categories` | Agrupa canales dentro de un servidor, con `position` |
 | `channels` | Canal de texto o voz, opcionalmente dentro de una categoría, con `position` |
 | `server_members` | Membresía de un usuario en un servidor |

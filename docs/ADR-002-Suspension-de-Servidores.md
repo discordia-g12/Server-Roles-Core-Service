@@ -64,7 +64,7 @@ Como la lista no trae canales ni categorías, no expone contenido.
 
 | Pieza | Estado |
 |-------|--------|
-| Columnas y migración `d5e6f7a8b9c0` | Implementado |
+| Columnas y migración `a8b9c0d1e2f3` | Implementado |
 | Endpoints de staff (suspender, levantar, listar) | Implementado (con tests) |
 | Guard de rutas, acceso interno, invitaciones y `visible-channels` | Implementado (con tests) |
 | Lista del miembro con `is_suspended` y sin contenido | Implementado (con tests) |

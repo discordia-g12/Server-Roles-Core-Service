@@ -8,6 +8,7 @@ from app.models.role import Role
 from app.models.role_assignment import RoleAssignment
 from app.models.server_ban import ServerBan
 from app.models.server_member import ServerMember
+from app.models.server_member_event import ServerMemberEvent
 from app.models.server_mute import ServerMute
 from app.repositories.outbox import add_outbox_event
 
@@ -56,6 +57,7 @@ class ModerationRepository:
 
         member = await self.get_member(db, server_id, user_id)
         if member:
+            db.add(ServerMemberEvent(server_id=server_id, user_id=user_id, event_type="ban"))
             await db.delete(member)
 
         add_outbox_event(
@@ -72,7 +74,9 @@ class ModerationRepository:
         await db.refresh(ban)
         return ban
 
-    async def remove_ban(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> bool:
+    async def remove_ban(
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, unbanned_by: str | None = None
+    ) -> bool:
         removed_id = await db.scalar(
             delete(ServerBan)
             .where(ServerBan.server_id == server_id, ServerBan.user_id == user_id)
@@ -87,6 +91,7 @@ class ModerationRepository:
             {
                 "server_id": str(server_id),
                 "user_id": user_id,
+                "unbanned_by": unbanned_by,
             },
         )
         await db.commit()
@@ -105,6 +110,7 @@ class ModerationRepository:
         if not member:
             return False
 
+        db.add(ServerMemberEvent(server_id=server_id, user_id=user_id, event_type="kick"))
         await db.delete(member)
         add_outbox_event(
             db,
@@ -163,7 +169,9 @@ class ModerationRepository:
         await db.refresh(mute)
         return mute
 
-    async def remove_mute(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> bool:
+    async def remove_mute(
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, unmuted_by: str | None = None
+    ) -> bool:
         mute = await self.get_mute(db, server_id, user_id)
         if not mute:
             return False
@@ -175,6 +183,7 @@ class ModerationRepository:
             {
                 "server_id": str(server_id),
                 "user_id": user_id,
+                "unmuted_by": unmuted_by,
             },
         )
         await db.commit()

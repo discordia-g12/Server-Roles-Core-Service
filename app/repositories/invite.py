@@ -9,6 +9,7 @@ from app.models.server import Server
 from app.models.server_ban import ServerBan
 from app.models.server_invite import ServerInvite
 from app.models.server_member import ServerMember
+from app.models.server_member_event import ServerMemberEvent
 
 
 class InviteRepository:
@@ -80,6 +81,7 @@ class InviteRepository:
 
     async def create_server_member(self, db: AsyncSession, member: ServerMember) -> ServerMember:
         db.add(member)
+        db.add(ServerMemberEvent(server_id=member.server_id, user_id=member.user_id, event_type="join"))
         await db.flush()
         return member
 

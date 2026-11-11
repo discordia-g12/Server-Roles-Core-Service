@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,7 +30,9 @@ class RoleRepository:
         max_pos = result.scalar()
         return (max_pos + 1) if max_pos is not None else 0
 
-    async def create_role(self, db: AsyncSession, server_id: uuid.UUID, name: str, color: str | None) -> Role:
+    async def create_role(
+        self, db: AsyncSession, server_id: uuid.UUID, name: str, color: str | None, created_by: str | None = None
+    ) -> Role:
         position = await self.get_next_position(db, server_id)
         role = Role(
             server_id=server_id,
@@ -40,6 +43,17 @@ class RoleRepository:
             is_default=False,
         )
         db.add(role)
+        add_outbox_event(
+            db,
+            "role.created",
+            {
+                "server_id": str(server_id),
+                "role_id": str(role.id),
+                "name": name,
+                "color": color,
+                "created_by": created_by,
+            },
+        )
         await db.commit()
         await db.refresh(role)
         return role
@@ -73,12 +87,24 @@ class RoleRepository:
         result = await db.execute(query)
         return result.scalar_one_or_none()
 
-    async def delete_role(self, db: AsyncSession, role: Role) -> None:
-        add_outbox_event(db, "role.deleted", {"server_id": str(role.server_id), "role_id": str(role.id)})
+    async def delete_role(self, db: AsyncSession, role: Role, deleted_by: str | None = None) -> None:
+        add_outbox_event(
+            db,
+            "role.deleted",
+            {
+                "server_id": str(role.server_id),
+                "role_id": str(role.id),
+                "name": role.name,
+                "deleted_by": deleted_by,
+            },
+        )
         await db.delete(role)
         await db.commit()
 
-    async def update_role_permissions(self, db: AsyncSession, role: Role, new_permissions_bitmask: int) -> Role:
+    async def update_role_permissions(
+        self, db: AsyncSession, role: Role, new_permissions_bitmask: int, updated_by: str | None = None
+    ) -> Role:
+        old_permissions_bitmask = role.permissions_bitmask
         role.permissions_bitmask = new_permissions_bitmask
         db.add(role)
         add_outbox_event(
@@ -87,7 +113,12 @@ class RoleRepository:
             {
                 "server_id": str(role.server_id),
                 "role_id": str(role.id),
-                "permissions_bitmask": new_permissions_bitmask,
+                "name": role.name,
+                "old_permissions": old_permissions_bitmask,
+                "new_permissions": new_permissions_bitmask,
+                "old_permissions_bitmask": old_permissions_bitmask,
+                "new_permissions_bitmask": new_permissions_bitmask,
+                "updated_by": updated_by,
             },
         )
         await db.commit()
@@ -130,6 +161,7 @@ class RoleRepository:
         role_id: uuid.UUID,
         server_id: uuid.UUID | None = None,
         user_id: str | None = None,
+        assigned_by: str | None = None,
     ) -> None:
         already_assigned = await db.scalar(
             select(func.count())
@@ -151,6 +183,8 @@ class RoleRepository:
         assignment = RoleAssignment(server_member_id=server_member_id, role_id=role_id)
         db.add(assignment)
         if server_id and user_id:
+            role = await db.scalar(select(Role).where(Role.id == role_id))
+            role_name = role.name if role else None
             add_outbox_event(
                 db,
                 "member.role_assigned",
@@ -158,6 +192,8 @@ class RoleRepository:
                     "server_id": str(server_id),
                     "user_id": user_id,
                     "role_id": str(role_id),
+                    "role_name": role_name,
+                    "assigned_by": assigned_by,
                 },
             )
         await db.commit()
@@ -169,6 +205,7 @@ class RoleRepository:
         role_id: uuid.UUID,
         server_id: uuid.UUID | None = None,
         user_id: str | None = None,
+        removed_by: str | None = None,
     ) -> bool:
         query = select(RoleAssignment).where(
             RoleAssignment.server_member_id == server_member_id,
@@ -186,6 +223,8 @@ class RoleRepository:
                 user_id = member.user_id
 
         if server_id and user_id:
+            role = await db.scalar(select(Role).where(Role.id == role_id))
+            role_name = role.name if role else None
             add_outbox_event(
                 db,
                 "member.role_removed",
@@ -193,6 +232,8 @@ class RoleRepository:
                     "server_id": str(server_id),
                     "user_id": user_id,
                     "role_id": str(role_id),
+                    "role_name": role_name,
+                    "removed_by": removed_by,
                 },
             )
 
@@ -212,12 +253,29 @@ class RoleRepository:
         await db.refresh(role)
         return role
 
-    async def update_role(self, db: AsyncSession, role: Role, name: str | None, color: str | None) -> Role:
-        if name is not None:
+    async def update_role(
+        self, db: AsyncSession, role: Role, name: str | None, color: str | None, updated_by: str | None = None
+    ) -> Role:
+        changes: dict[str, Any] = {}
+        if name is not None and name != role.name:
+            changes["name"] = {"old": role.name, "new": name}
             role.name = name
-        if color is not None:
+        if color is not None and color != role.color:
+            changes["color"] = {"old": role.color, "new": color}
             role.color = color
         db.add(role)
+        if changes:
+            add_outbox_event(
+                db,
+                "role.updated",
+                {
+                    "server_id": str(role.server_id),
+                    "role_id": str(role.id),
+                    "name": role.name,
+                    "changes": changes,
+                    "updated_by": updated_by,
+                },
+            )
         await db.commit()
         await db.refresh(role)
         return role

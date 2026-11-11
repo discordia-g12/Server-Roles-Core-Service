@@ -39,7 +39,7 @@ class CategoryService:
                 detail="A category with that name already exists in this server."
             )
 
-        return await self.repo.create_category(db, server_id, category_data.name)
+        return await self.repo.create_category(db, server_id, category_data.name, created_by=user_id)
 
     async def reorder_categories(
         self, db: AsyncSession, server_id: uuid.UUID, user_id: str, reorder: CategoryReorder
@@ -88,5 +88,5 @@ class CategoryService:
         if not category:
             raise HTTPException(status_code=404, detail="Category not found.")
 
-        await self.repo.delete_category(db, category)
+        await self.repo.delete_category(db, category, deleted_by=user_id)
 

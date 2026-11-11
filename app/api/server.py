@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -23,10 +24,12 @@ from app.schemas.role import (
     RoleUpdatePermissions,
 )
 from app.schemas.server import (
+    MemberGrowthResponse,
     MutualServerResponse,
     ServerCreate,
     ServerMemberPage,
     ServerResponse,
+    ServerUpdate,
     member_server_view,
 )
 from app.schemas.server_transfer import ServerTransferCreate, ServerTransferResponse
@@ -76,6 +79,19 @@ async def create_server_endpoint(
     return created_server
 
 
+@router.patch("/servers/{server_id}", response_model=ServerResponse, status_code=200)
+async def update_server_endpoint(
+    server_id: uuid.UUID,
+    server_data: ServerUpdate,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Cambia nombre y/o descripción (JSON, solo los campos que se mandan). 403 sin MANAGE_SERVER,
+    422 con datos inválidos (y no se guarda nada)."""
+    service = ServerService(ServerRepository())
+    return await service.update_server(db, server_id=server_id, user_id=user_id, data=server_data)
+
+
 @router.put("/servers/{server_id}/icon", response_model=ServerResponse, status_code=200)
 async def update_server_icon_endpoint(
     server_id: uuid.UUID,
@@ -97,6 +113,29 @@ async def remove_server_icon_endpoint(
     """Quita el ícono. Devuelve el servidor sin ícono."""
     service = ServerService(ServerRepository())
     return await service.remove_icon(db, server_id=server_id, user_id=user_id)
+
+
+@router.put("/servers/{server_id}/banner", response_model=ServerResponse, status_code=200)
+async def update_server_banner_endpoint(
+    server_id: uuid.UUID,
+    banner: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Reemplaza el banner (multipart, campo "banner"). Devuelve el servidor con la URL nueva."""
+    service = ServerService(ServerRepository())
+    return await service.update_banner(db, server_id=server_id, user_id=user_id, banner=banner)
+
+
+@router.delete("/servers/{server_id}/banner", response_model=ServerResponse, status_code=200)
+async def remove_server_banner_endpoint(
+    server_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Quita el banner. Devuelve el servidor sin banner."""
+    service = ServerService(ServerRepository())
+    return await service.remove_banner(db, server_id=server_id, user_id=user_id)
 
 
 @router.get("/servers/{server_id}/members", response_model=ServerMemberPage, status_code=200)
@@ -315,6 +354,16 @@ async def leave_server_endpoint(
     await service.leave_server(db, server_id, user_id)
 
 
+@router.delete("/servers/{server_id}", status_code=204)
+async def delete_server_endpoint(
+    server_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = ServerService(ServerRepository())
+    await service.delete_server(db, server_id, user_id)
+
+
 @router.patch("/servers/{server_id}/roles/{role_id}", response_model=RoleResponse, status_code=200)
 async def update_role_endpoint(
     server_id: uuid.UUID,
@@ -468,3 +517,33 @@ async def cancel_transfer_endpoint(
 ):
     service = ServerTransferService()
     return await service.cancel_transfer(db, server_id=server_id, user_id=user_id, transfer_id=transfer_id)
+
+
+@router.get(
+    "/servers/{server_id}/metrics/member-growth",
+    response_model=MemberGrowthResponse,
+    status_code=200,
+)
+@router.get(
+    "/servers/{server_id}/member-growth",
+    response_model=MemberGrowthResponse,
+    status_code=200,
+)
+async def get_member_growth_endpoint(
+    server_id: uuid.UUID,
+    days: int | None = Query(default=None, ge=1, le=365),
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = ServerService(ServerRepository())
+    return await service.get_member_growth(
+        db=db,
+        server_id=server_id,
+        user_id=user_id,
+        start_date=start_date,
+        end_date=end_date,
+        days=days,
+    )
+

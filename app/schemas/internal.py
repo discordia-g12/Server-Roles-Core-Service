@@ -13,6 +13,8 @@ class ChannelAccessResponse(BaseModel):
     mentionable_role_ids: list[str] = []
     # MANAGE_MESSAGES en el canal: autoriza a moderadores a borrar mensajes de otros
     can_manage_messages: bool = False
+    # ADD_REACTIONS en el canal: autoriza a agregar reacciones
+    can_add_reactions: bool = False
 
 
 class VisibleChannelsResponse(BaseModel):
@@ -35,3 +37,17 @@ class CanConnectResponse(BaseModel):
     can_speak: bool
     can_video: bool
     can_screen_share: bool
+
+
+class ServerPermissionsResponse(BaseModel):
+    server_id: str
+    user_id: str
+    is_owner: bool
+    can_moderate: bool
+    permissions_bitmask: int
+
+
+class ServerMemberIdsResponse(BaseModel):
+    server_id: str
+    # Ids de usuario de todos los miembros, incluido el dueño
+    user_ids: list[str]

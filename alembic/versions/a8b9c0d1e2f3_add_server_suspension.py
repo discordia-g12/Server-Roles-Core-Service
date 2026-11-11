@@ -1,7 +1,7 @@
 """add server suspension
 
-Revision ID: d5e6f7a8b9c0
-Revises: c4d5e6f7a8b9
+Revision ID: a8b9c0d1e2f3
+Revises: f7a8b9c0d1e2
 Create Date: 2026-11-08 12:00:00.000000
 
 """
@@ -10,8 +10,8 @@ from typing import Sequence, Union
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = 'd5e6f7a8b9c0'
-down_revision: Union[str, Sequence[str], None] = 'c4d5e6f7a8b9'
+revision: str = 'a8b9c0d1e2f3'
+down_revision: Union[str, Sequence[str], None] = 'f7a8b9c0d1e2'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

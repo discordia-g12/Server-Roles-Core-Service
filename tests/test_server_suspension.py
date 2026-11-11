@@ -129,6 +129,18 @@ def test_chat_and_voice_access_is_denied_while_suspended():
     assert text not in visible.json()["channel_ids"]
 
 
+def test_audit_log_permissions_are_denied_while_suspended():
+    # Notification-Audit-Metrics pregunta acá antes de mostrar el registro de auditoría del servidor
+    owner = f"auth0|{uuid.uuid4()}"
+    server = create_server(owner)
+    suspend(server["id"])
+
+    response = client.get(f"/internal/servers/{server['id']}/members/{owner}/permissions")
+
+    assert response.status_code == 403
+    assert response.json()["type"] == SUSPENDED_TYPE
+
+
 def test_member_still_sees_the_server_marked_suspended_without_its_content():
     owner = f"auth0|{uuid.uuid4()}"
     server = create_server(owner)

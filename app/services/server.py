@@ -1,17 +1,29 @@
 import asyncio
 import uuid
+from datetime import UTC, date, datetime, timedelta
+from typing import Any
 
 from fastapi import HTTPException, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import Permission
-from app.exceptions import BadRequestError, MissingServerPermissionError, ServerNotFoundError
+from app.exceptions import (
+    BadRequestError,
+    ForbiddenError,
+    MissingServerPermissionError,
+    ServerNotFoundError,
+    UnprocessableEntityError,
+)
 from app.repositories.server import ServerRepository
+from app.schemas.server import ServerUpdate
 from app.services import storage
 from app.services.channel_access import ChannelAccessService
-from app.services.image import normalize_image
+from app.services.image import BANNER_SIZE, ICON_SIZE, normalize_image
 
 ICONS_PREFIX = "server-icons"
+# Dentro de server-icons/: es el único prefijo que el usuario IAM del servicio puede escribir y que el bucket
+# publica (infra/terraform/locals.tf, media_writers). Un prefijo propio necesitaría un apply de Terraform.
+BANNERS_PREFIX = f"{ICONS_PREFIX}/banners"
 
 
 class ServerService:
@@ -65,33 +77,96 @@ class ServerService:
             raise MissingServerPermissionError()
         return server
 
-    async def update_icon(self, db: AsyncSession, server_id: uuid.UUID, user_id: str, icon: UploadFile):
-        """Reemplaza el ícono: sube el nuevo, lo guarda y recién después borra el anterior."""
+    async def update_server(self, db: AsyncSession, server_id: uuid.UUID, user_id: str, data: ServerUpdate):
+        """Cambia nombre y/o descripción. Si no cambia nada, no guarda ni emite server.updated."""
         server = await self._get_manageable_server(db, server_id, user_id)
-        previous_url = server.icon_url
+        changes = {field: value for field, value in data.changes().items() if getattr(server, field) != value}
+        if not changes:
+            return await self._with_my_permissions(db, server, user_id)
 
-        image = normalize_image(await icon.read())
-        icon_url = await asyncio.to_thread(storage.upload_image, image, ICONS_PREFIX)
         try:
-            updated = await self.repo.set_icon(db, server, icon_url)
+            updated = await self.repo.update_server(db, server, changes, updated_by=user_id)
         except Exception:
             await db.rollback()
-            await asyncio.to_thread(storage.delete_image, icon_url)
+            raise
+        return await self._with_my_permissions(db, updated, user_id)
+
+    async def _replace_image(
+        self, db: AsyncSession, server, file: UploadFile, field: str, prefix: str, size, save, user_id: str
+    ):
+        """Sube la imagen nueva, la guarda y recién después borra la anterior. Si falla la base, borra la que
+        subió (no la referencia nadie) y el servidor queda como estaba."""
+        previous_url = getattr(server, field)
+
+        image = normalize_image(await file.read(), size)
+        new_url = await asyncio.to_thread(storage.upload_image, image, prefix)
+        try:
+            updated = await save(db, server, new_url, updated_by=user_id)
+        except Exception:
+            await db.rollback()
+            await asyncio.to_thread(storage.delete_image, new_url)
             raise
 
+        if previous_url:
+            await asyncio.to_thread(storage.delete_image, previous_url)
+        return updated
+
+    async def _remove_image(self, db: AsyncSession, server, field: str, save, user_id: str):
+        """Quita la imagen y borra el archivo. Sin imagen no hace nada (ni emite el evento)."""
+        previous_url = getattr(server, field)
+        if previous_url is None:
+            return server
+
+        updated = await save(db, server, None, updated_by=user_id)
         await asyncio.to_thread(storage.delete_image, previous_url)
+        return updated
+
+    async def update_icon(self, db: AsyncSession, server_id: uuid.UUID, user_id: str, icon: UploadFile):
+        """Reemplaza el ícono (cuadrado de 256 px)."""
+        server = await self._get_manageable_server(db, server_id, user_id)
+        updated = await self._replace_image(
+            db, server, icon, "icon_url", ICONS_PREFIX, ICON_SIZE, self.repo.set_icon, user_id
+        )
         return await self._with_my_permissions(db, updated, user_id)
 
     async def remove_icon(self, db: AsyncSession, server_id: uuid.UUID, user_id: str):
         """Quita el ícono (el servidor vuelve a mostrar sus iniciales) y borra el archivo."""
         server = await self._get_manageable_server(db, server_id, user_id)
-        previous_url = server.icon_url
-        if previous_url is None:
-            return await self._with_my_permissions(db, server, user_id)
-
-        updated = await self.repo.set_icon(db, server, None)
-        await asyncio.to_thread(storage.delete_image, previous_url)
+        updated = await self._remove_image(db, server, "icon_url", self.repo.set_icon, user_id)
         return await self._with_my_permissions(db, updated, user_id)
+
+    async def update_banner(self, db: AsyncSession, server_id: uuid.UUID, user_id: str, banner: UploadFile):
+        """Reemplaza el banner (16:9, 960x540)."""
+        server = await self._get_manageable_server(db, server_id, user_id)
+        updated = await self._replace_image(
+            db, server, banner, "banner_url", BANNERS_PREFIX, BANNER_SIZE, self.repo.set_banner, user_id
+        )
+        return await self._with_my_permissions(db, updated, user_id)
+
+    async def remove_banner(self, db: AsyncSession, server_id: uuid.UUID, user_id: str):
+        """Quita el banner y borra el archivo."""
+        server = await self._get_manageable_server(db, server_id, user_id)
+        updated = await self._remove_image(db, server, "banner_url", self.repo.set_banner, user_id)
+        return await self._with_my_permissions(db, updated, user_id)
+
+    async def get_member_user_ids(self, db: AsyncSession, server_id: uuid.UUID) -> list[str]:
+        """Miembros del servidor (endpoint interno, para que Chat avise un cambio por el inbox)."""
+        if not await self.repo.get_server_by_id(db, server_id):
+            raise ServerNotFoundError()
+        return await self.repo.get_member_user_ids(db, server_id)
+
+    async def delete_server(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> None:
+        server = await self.repo.get_server_by_id(db, server_id)
+        if not server:
+            raise ServerNotFoundError()
+        if server.owner_id != user_id:
+            raise ForbiddenError("Only the server owner can delete this server.")
+
+        image_urls = [url for url in (server.icon_url, server.banner_url) if url]
+        await self.repo.delete_server(db, server)
+
+        for url in image_urls:
+            await asyncio.to_thread(storage.delete_image, url)
 
     async def leave_server(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> None:
         server = await self.repo.get_server_by_id(db, server_id)
@@ -118,3 +193,30 @@ class ServerService:
 
         items, total = await self.repo.get_members_page(db, server_id, limit, offset)
         return {"items": items, "total": total, "limit": limit, "offset": offset}
+
+    async def get_member_growth(
+        self,
+        db: AsyncSession,
+        server_id: uuid.UUID,
+        user_id: str,
+        start_date: date | None = None,
+        end_date: date | None = None,
+        days: int | None = None,
+    ) -> dict[str, Any]:
+        """Consulta el gráfico de crecimiento de miembros (requiere MANAGE_SERVER, ADMINISTRATOR o dueño)."""
+        await self._get_manageable_server(db, server_id, user_id)
+
+        today = datetime.now(UTC).date()
+        if start_date is not None and end_date is not None:
+            if start_date > end_date:
+                raise UnprocessableEntityError(detail="start_date cannot be after end_date")
+            resolved_start = start_date
+            resolved_end = end_date
+        elif days is not None:
+            resolved_end = today
+            resolved_start = today - timedelta(days=max(0, days - 1))
+        else:
+            resolved_end = today
+            resolved_start = today - timedelta(days=29)
+
+        return await self.repo.get_member_growth(db, server_id, resolved_start, resolved_end)

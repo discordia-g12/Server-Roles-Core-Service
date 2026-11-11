@@ -22,6 +22,7 @@ class Server(Base):
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     icon_url: Mapped[str | None] = mapped_column(String, nullable=True)
+    banner_url: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime | None] = mapped_column(onupdate=func.now(), nullable=True)
     # Suspensión por el staff de la plataforma (docs/ADR-002-Suspension-de-Servidores.md): cuándo, quién y por
@@ -35,8 +36,18 @@ class Server(Base):
         return self.suspended_at is not None
 
     channels: Mapped[list["Channel"]] = relationship(
-        "Channel", lazy="selectin", order_by="Channel.position", viewonly=False
+        "Channel",
+        lazy="selectin",
+        order_by="Channel.position",
+        viewonly=False,
+        cascade="all, delete",
+        passive_deletes=True,
     )
     categories: Mapped[list["Category"]] = relationship(
-        "Category", lazy="selectin", order_by="Category.position", viewonly=False
+        "Category",
+        lazy="selectin",
+        order_by="Category.position",
+        viewonly=False,
+        cascade="all, delete",
+        passive_deletes=True,
     )

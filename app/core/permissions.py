@@ -27,6 +27,7 @@ class Permission(IntFlag):
     ADMINISTRATOR = 1 << 20
     VIDEO = 1 << 21
     SCREEN_SHARE = 1 << 22
+    VIEW_AUDIT_LOG = 1 << 23
 
 
 DEFAULT_ROLE_PERMISSIONS = (
