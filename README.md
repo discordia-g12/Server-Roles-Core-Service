@@ -115,7 +115,8 @@ responde `403` con `type` `https://discordia.app/problems/server-suspended`, par
 Solo se puede salir (`DELETE /servers/{id}/leave`). `GET /servers` lo sigue listando, con `is_suspended: true` y sin
 canales ni categorías. Unirse con una invitación también da `403`.
 
-**Endpoints internos** (`/internal`, sin prefijo de versión). Los usan Chat y Voice y **no pasan por Kong**.
+**Endpoints internos** (`/internal`, sin prefijo de versión). Los usan Chat, Voice y Notification-Audit-Metrics
+y **no pasan por Kong**.
 Hoy no tienen autenticación: solo se llega a ellos por la red entre nodos.
 
 | Ruta | Quién la usa | Devuelve |
@@ -125,6 +126,19 @@ Hoy no tienen autenticación: solo se llega a ellos por la red entre nodos.
 | `GET /internal/servers/{id}/member-ids` | Chat, al recibir `server.updated`, para avisar a los miembros por el inbox | `user_ids` de todos los miembros; `404` si el servidor no existe |
 | `GET /internal/channels/{id}/can-connect?user_id=` | Voice, al unirse a una llamada | Si puede entrar y qué puede publicar (micrófono, cámara, pantalla) |
 | `GET /internal/channels/{id}/can-send?user_id=` | Versiones viejas de Chat | Deprecado: reemplazado por `access` |
+| `GET /internal/metrics/servers?from=&to=` | Notification-Audit-Metrics, para las métricas globales del backoffice (`GET /api/v1/admin/metrics`) | `{"from", "to", "serversCreated"}`: servidores con `created_at` en `[from, to)`. Ver abajo |
+
+**Métrica de servidores creados** (`GET /internal/metrics/servers`). `from` y `to` son ISO 8601; con
+offset se pasan a UTC y sin zona se toman como UTC. El período es `[from, to)`: un servidor creado justo en
+`to` no entra. Responde las dos fechas normalizadas en UTC con `Z`:
+
+```json
+{"from": "2026-11-01T00:00:00.000Z", "to": "2026-11-11T00:00:00.000Z", "serversCreated": 42}
+```
+
+`400` si `from >= to`; `422` si falta alguna o no es una fecha. Cuenta los suspendidos. Limitación: el
+borrado de un servidor es físico, así que un servidor creado en el período y borrado después no se cuenta
+(no hay evento `server.created` ni registro histórico). `servers.created_at` tiene índice para esta consulta.
 
 ### Permisos
 

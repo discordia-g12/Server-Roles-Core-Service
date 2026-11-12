@@ -17,13 +17,20 @@ from app.exceptions import (
 from app.repositories.server import ServerRepository
 from app.schemas.server import ServerUpdate
 from app.services import storage
-from app.services.channel_access import ChannelAccessService
+from app.services.channel_access import ChannelAccessService, to_utc_iso
 from app.services.image import BANNER_SIZE, ICON_SIZE, normalize_image
 
 ICONS_PREFIX = "server-icons"
 # Dentro de server-icons/: es el único prefijo que el usuario IAM del servicio puede escribir y que el bucket
 # publica (infra/terraform/locals.tf, media_writers). Un prefijo propio necesitaría un apply de Terraform.
 BANNERS_PREFIX = f"{ICONS_PREFIX}/banners"
+
+
+def _to_naive_utc(value: datetime) -> datetime:
+    """Las columnas son TIMESTAMP sin zona, guardadas en UTC."""
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(UTC).replace(tzinfo=None)
 
 
 class ServerService:
@@ -154,6 +161,16 @@ class ServerService:
         if not await self.repo.get_server_by_id(db, server_id):
             raise ServerNotFoundError()
         return await self.repo.get_member_user_ids(db, server_id)
+
+    async def get_servers_created_metrics(self, db: AsyncSession, start: datetime, end: datetime) -> dict[str, Any]:
+        """Métrica global del backoffice (endpoint interno). Período [start, end); una fecha sin zona se toma
+        como UTC. 400 si start >= end."""
+        start_utc = _to_naive_utc(start)
+        end_utc = _to_naive_utc(end)
+        if start_utc >= end_utc:
+            raise BadRequestError("'from' must be earlier than 'to'.")
+        count = await self.repo.count_servers_created(db, start_utc, end_utc)
+        return {"from": to_utc_iso(start_utc), "to": to_utc_iso(end_utc), "serversCreated": count}
 
     async def delete_server(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> None:
         server = await self.repo.get_server_by_id(db, server_id)
