@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ChannelAccessResponse(BaseModel):
@@ -51,3 +51,15 @@ class ServerMemberIdsResponse(BaseModel):
     server_id: str
     # Ids de usuario de todos los miembros, incluido el dueño
     user_ids: list[str]
+
+
+class ServersCreatedMetricsResponse(BaseModel):
+    """Notification-Audit-Metrics: servidores creados en [from, to), para las métricas del backoffice."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    # ISO 8601 en UTC con "Z", el mismo período que se pidió
+    from_: str = Field(alias="from")
+    to: str
+    # Incluye los suspendidos. Los borrados no: el borrado es físico
+    servers_created: int = Field(alias="serversCreated")

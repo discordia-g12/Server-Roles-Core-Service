@@ -23,7 +23,8 @@ class Server(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     icon_url: Mapped[str | None] = mapped_column(String, nullable=True)
     banner_url: Mapped[str | None] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False)
+    # Indexado: el backoffice cuenta los servidores creados por período (/internal/metrics/servers)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now(), nullable=False, index=True)
     updated_at: Mapped[datetime | None] = mapped_column(onupdate=func.now(), nullable=True)
     # Suspensión por el staff de la plataforma (docs/ADR-002-Suspension-de-Servidores.md): cuándo, quién y por
     # qué. Vacíos si no está suspendido. El contenido no se toca: al levantarla todo vuelve como estaba

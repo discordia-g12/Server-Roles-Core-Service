@@ -207,6 +207,11 @@ class ServerRepository:
         await db.commit()
         return channel_ids
 
+    async def count_servers_created(self, db: AsyncSession, start: datetime, end: datetime) -> int:
+        """Servidores con created_at en [start, end). Las fechas van en UTC sin tzinfo, como la columna."""
+        stmt = select(func.count()).select_from(Server).where(Server.created_at >= start, Server.created_at < end)
+        return await db.scalar(stmt) or 0
+
     async def get_member_growth(
         self, db: AsyncSession, server_id: uuid.UUID, start_date: date, end_date: date
     ) -> dict[str, Any]:
