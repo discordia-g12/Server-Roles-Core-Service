@@ -1,11 +1,20 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Body, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_staff
 from app.db.session import get_db
-from app.schemas.admin import AdminServerPage, AdminServerResponse, ServerStateFilter, SuspendServerRequest
+from app.repositories.server import ServerRepository
+from app.schemas.admin import (
+    AdminServerPage,
+    AdminServerResponse,
+    DeletedServerResponse,
+    DeleteServerRequest,
+    ServerStateFilter,
+    SuspendServerRequest,
+)
+from app.services.server import ServerService
 from app.services.server_directory import ServerDirectoryService
 from app.services.server_suspension import ServerSuspensionService
 
@@ -15,6 +24,7 @@ from app.services.server_suspension import ServerSuspensionService
 router = APIRouter(prefix="/api/v1/admin/servers", tags=["backoffice: servers"])
 service = ServerSuspensionService()
 directory = ServerDirectoryService()
+server_service = ServerService(ServerRepository())
 
 
 @router.get("", response_model=AdminServerPage, status_code=status.HTTP_200_OK)
@@ -60,3 +70,16 @@ async def lift_server_suspension(
     """Levanta la suspensión: los miembros recuperan el acceso normal. 404 si no existe, 409 si no estaba
     suspendido."""
     return await service.lift(db, server_id, staff_user_id)
+
+
+@router.delete("/{server_id}", response_model=DeletedServerResponse, status_code=status.HTTP_200_OK)
+async def delete_server_by_staff(
+    server_id: uuid.UUID,
+    payload: DeleteServerRequest | None = Body(default=None),
+    db: AsyncSession = Depends(get_db),
+    staff_user_id: str = Depends(require_staff),
+):
+    """Elimina permanentemente el servidor y todo su contenido (canales, categorías, roles, miembros e
+    invitaciones) y publica server.deleted para Chat y Voz. 404 si no existe, 403 si no es staff."""
+    reason = payload.reason if payload else None
+    return await server_service.delete_server_by_staff(db, server_id, staff_user_id, reason=reason)

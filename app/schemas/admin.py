@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SuspendServerRequest(BaseModel):
@@ -15,6 +15,40 @@ class SuspendServerRequest(BaseModel):
         pattern=r"^[^\x00]+$",
         description="Why: stored with the suspension and sent in the server.suspended event (audit)",
     )
+
+
+class DeleteServerRequest(BaseModel):
+    """Staff permanently deletes a server (backoffice, "Eliminar servidor desde el backoffice")."""
+
+    reason: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=512,
+        pattern=r"^[^\x00]+$",
+        description="Why: logged and sent in the server.deleted event (audit)",
+    )
+
+    @field_validator("reason")
+    @classmethod
+    def reason_not_blank(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("Reason cannot be blank.")
+        return trimmed
+
+
+class DeletedServerResponse(BaseModel):
+    """Summary returned after staff permanently deletes a server."""
+
+    id: UUID
+    name: str
+    owner_id: str
+    member_count: int
+    deleted_by: str
+    reason: str | None = None
+    deleted_at: datetime
 
 
 class AdminServerResponse(BaseModel):
