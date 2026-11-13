@@ -190,17 +190,38 @@ class ServerRepository:
         ]
         return items, total or 0
 
-    async def delete_server(self, db: AsyncSession, server: Server) -> list[uuid.UUID]:
-        channel_ids_stmt = select(Channel.id).where(Channel.server_id == server.id)
-        channel_ids = list((await db.execute(channel_ids_stmt)).scalars().all())
+    async def delete_server(
+        self,
+        db: AsyncSession,
+        server: Server,
+        *,
+        deleted_by: str | None = None,
+        reason: str | None = None,
+    ) -> list[uuid.UUID]:
+        channel_rows = list(
+            (await db.execute(select(Channel.id, Channel.type).where(Channel.server_id == server.id))).all()
+        )
+        channel_ids = [row.id for row in channel_rows]
+        voice_channel_ids = [str(row.id) for row in channel_rows if row.type == "voice"]
+        member_ids = [
+            str(uid)
+            for uid in (
+                await db.execute(select(ServerMember.user_id).where(ServerMember.server_id == server.id))
+            ).scalars().all()
+        ]
 
         add_outbox_event(
             db,
             "server.deleted",
             {
                 "server_id": str(server.id),
+                "server_name": server.name,
                 "channel_ids": [str(cid) for cid in channel_ids],
+                "voice_channel_ids": voice_channel_ids,
+                "member_ids": member_ids,
                 "owner_id": server.owner_id,
+                "deleted_by": deleted_by or server.owner_id,
+                **({"reason": reason} if reason else {}),
             },
         )
         await db.delete(server)

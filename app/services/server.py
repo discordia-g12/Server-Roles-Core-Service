@@ -1,9 +1,11 @@
 import asyncio
+import logging
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException, UploadFile
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import Permission
@@ -14,11 +16,15 @@ from app.exceptions import (
     ServerNotFoundError,
     UnprocessableEntityError,
 )
+from app.models.server_member import ServerMember
 from app.repositories.server import ServerRepository
+from app.schemas.admin import DeletedServerResponse
 from app.schemas.server import ServerUpdate
 from app.services import storage
 from app.services.channel_access import ChannelAccessService, to_utc_iso
 from app.services.image import BANNER_SIZE, ICON_SIZE, normalize_image
+
+logger = logging.getLogger(__name__)
 
 ICONS_PREFIX = "server-icons"
 # Dentro de server-icons/: es el único prefijo que el usuario IAM del servicio puede escribir y que el bucket
@@ -172,6 +178,20 @@ class ServerService:
         count = await self.repo.count_servers_created(db, start_utc, end_utc)
         return {"from": to_utc_iso(start_utc), "to": to_utc_iso(end_utc), "serversCreated": count}
 
+    async def _delete_server_and_images(
+        self,
+        db: AsyncSession,
+        server,
+        *,
+        deleted_by: str,
+        reason: str | None = None,
+    ) -> None:
+        image_urls = [url for url in (server.icon_url, server.banner_url) if url]
+        await self.repo.delete_server(db, server, deleted_by=deleted_by, reason=reason)
+
+        for url in image_urls:
+            await asyncio.to_thread(storage.delete_image, url)
+
     async def delete_server(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> None:
         server = await self.repo.get_server_by_id(db, server_id)
         if not server:
@@ -179,11 +199,38 @@ class ServerService:
         if server.owner_id != user_id:
             raise ForbiddenError("Only the server owner can delete this server.")
 
-        image_urls = [url for url in (server.icon_url, server.banner_url) if url]
-        await self.repo.delete_server(db, server)
+        await self._delete_server_and_images(db, server, deleted_by=user_id)
 
-        for url in image_urls:
-            await asyncio.to_thread(storage.delete_image, url)
+    async def delete_server_by_staff(
+        self,
+        db: AsyncSession,
+        server_id: uuid.UUID,
+        staff_user_id: str,
+        reason: str | None = None,
+    ) -> DeletedServerResponse:
+        """Elimina un servidor desde el backoffice sin depender de su dueño ni sus administradores."""
+        server = await self.repo.get_server_by_id(db, server_id)
+        if not server:
+            raise ServerNotFoundError()
+
+        member_count = await db.scalar(
+            select(func.count()).select_from(ServerMember).where(ServerMember.server_id == server.id)
+        )
+        server_name = server.name
+        owner_id = server.owner_id
+        deleted_at = datetime.now(UTC).replace(tzinfo=None)
+
+        await self._delete_server_and_images(db, server, deleted_by=staff_user_id, reason=reason)
+        logger.info("server_deleted_by_staff server_id=%s deleted_by=%s", server_id, staff_user_id)
+        return DeletedServerResponse(
+            id=server_id,
+            name=server_name,
+            owner_id=owner_id,
+            member_count=int(member_count or 0),
+            deleted_by=staff_user_id,
+            reason=reason,
+            deleted_at=deleted_at,
+        )
 
     async def leave_server(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> None:
         server = await self.repo.get_server_by_id(db, server_id)
