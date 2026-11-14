@@ -233,6 +233,55 @@ class ServerRepository:
         stmt = select(func.count()).select_from(Server).where(Server.created_at >= start, Server.created_at < end)
         return await db.scalar(stmt) or 0
 
+    async def get_server_activity_inputs(
+        self, db: AsyncSession, server_id: uuid.UUID, start: datetime, end: datetime
+    ) -> dict[str, Any]:
+        """Canales actuales del servidor y altas de miembros en [start, end) en UTC."""
+        channel_rows = (
+            await db.execute(select(Channel.id).where(Channel.server_id == server_id))
+        ).scalars().all()
+        channel_ids = [str(cid) for cid in channel_rows]
+
+        total_events = (
+            await db.scalar(
+                select(func.count()).select_from(ServerMemberEvent).where(ServerMemberEvent.server_id == server_id)
+            )
+            or 0
+        )
+
+        if total_events > 0:
+            join_timestamps = (
+                await db.execute(
+                    select(ServerMemberEvent.created_at).where(
+                        ServerMemberEvent.server_id == server_id,
+                        ServerMemberEvent.event_type == "join",
+                        ServerMemberEvent.created_at >= start,
+                        ServerMemberEvent.created_at < end,
+                    )
+                )
+            ).scalars().all()
+        else:
+            join_timestamps = (
+                await db.execute(
+                    select(ServerMember.joined_at).where(
+                        ServerMember.server_id == server_id,
+                        ServerMember.joined_at >= start,
+                        ServerMember.joined_at < end,
+                    )
+                )
+            ).scalars().all()
+
+        daily_counts: dict[str, int] = defaultdict(int)
+        for ts in join_timestamps:
+            day_key = (ts.date() if isinstance(ts, datetime) else ts).isoformat()
+            daily_counts[day_key] += 1
+
+        return {
+            "channel_ids": channel_ids,
+            "new_members": len(join_timestamps),
+            "daily_new_members": [{"date": day, "count": count} for day, count in sorted(daily_counts.items())],
+        }
+
     async def get_member_growth(
         self, db: AsyncSession, server_id: uuid.UUID, start_date: date, end_date: date
     ) -> dict[str, Any]:

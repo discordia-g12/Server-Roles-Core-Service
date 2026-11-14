@@ -178,6 +178,26 @@ class ServerService:
         count = await self.repo.count_servers_created(db, start_utc, end_utc)
         return {"from": to_utc_iso(start_utc), "to": to_utc_iso(end_utc), "serversCreated": count}
 
+    async def get_server_activity_metrics(
+        self, db: AsyncSession, server_id: uuid.UUID, start: datetime, end: datetime
+    ) -> dict[str, Any]:
+        """Insumos internos para métricas de actividad de un servidor en [start, end)."""
+        start_utc = _to_naive_utc(start)
+        end_utc = _to_naive_utc(end)
+        if start_utc >= end_utc:
+            raise BadRequestError("'from' must be earlier than 'to'.")
+        if not await self.repo.get_server_by_id(db, server_id):
+            raise ServerNotFoundError()
+        data = await self.repo.get_server_activity_inputs(db, server_id, start_utc, end_utc)
+        return {
+            "serverId": str(server_id),
+            "from": to_utc_iso(start_utc),
+            "to": to_utc_iso(end_utc),
+            "channelIds": data["channel_ids"],
+            "newMembers": data["new_members"],
+            "dailyNewMembers": data["daily_new_members"],
+        }
+
     async def _delete_server_and_images(
         self,
         db: AsyncSession,

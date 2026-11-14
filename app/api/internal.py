@@ -10,6 +10,7 @@ from app.schemas.internal import (
     CanConnectResponse,
     CanSendResponse,
     ChannelAccessResponse,
+    ServerActivityMetricsInternalResponse,
     ServerMemberIdsResponse,
     ServerPermissionsResponse,
     ServersCreatedMetricsResponse,
@@ -98,3 +99,14 @@ async def servers_created_metrics(
     """Notification-Audit-Metrics: servidores creados en [from, to) para las métricas globales del backoffice.
     Fechas ISO 8601 (sin zona se toman como UTC). 400 si from >= to; 422 si no son fechas."""
     return await ServerService(ServerRepository()).get_servers_created_metrics(db, from_, to)
+
+
+@router.get("/metrics/servers/{server_id}", response_model=ServerActivityMetricsInternalResponse, status_code=200)
+async def server_activity_metrics(
+    server_id: uuid.UUID,
+    from_: datetime = Query(alias="from"),
+    to: datetime = Query(),
+    db: AsyncSession = Depends(get_db),
+):
+    """Notification-Audit-Metrics: canales y nuevos miembros de un servidor en [from, to)."""
+    return await ServerService(ServerRepository()).get_server_activity_metrics(db, server_id, from_, to)
