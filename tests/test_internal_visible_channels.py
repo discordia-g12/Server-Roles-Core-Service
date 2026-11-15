@@ -15,8 +15,9 @@ from tests.test_internal_access import (
 )
 
 
-def visible_channels(user_id: str) -> set[str]:
-    response = client.get(f"/internal/users/{user_id}/visible-channels")
+def visible_channels(user_id: str, server_id: str | None = None) -> set[str]:
+    params = {"server_id": server_id} if server_id else None
+    response = client.get(f"/internal/users/{user_id}/visible-channels", params=params)
     assert response.status_code == 200, response.json()
     return set(response.json()["channel_ids"])
 
@@ -72,6 +73,41 @@ def test_channels_of_servers_where_the_user_is_not_a_member_are_not_included():
 
     assert own_text in channels
     assert foreign_text not in channels
+
+
+# ---------- Filtro por servidor (búsqueda de mensajes) ----------
+
+
+def test_server_filter_returns_only_the_channels_of_that_server():
+    owner_id = str(uuid.uuid4())
+    first_id, first_text = create_server(owner_id)
+    second_id, second_text = create_server(owner_id)
+    extra_text = create_text_channel(second_id, owner_id)
+
+    assert visible_channels(owner_id, first_id) == {first_text}
+    assert visible_channels(owner_id, second_id) == {second_text, extra_text}
+
+
+def test_server_filter_of_a_server_where_the_user_is_not_a_member_is_empty():
+    server_id, _ = create_server(str(uuid.uuid4()))
+
+    assert visible_channels(str(uuid.uuid4()), server_id) == set()
+
+
+def test_server_filter_still_hides_channels_without_view_channels():
+    owner_id = str(uuid.uuid4())
+    server_id, text_id = create_server(owner_id)
+    hidden_id = create_text_channel(server_id, owner_id, "privado")
+    user_id, _ = add_member(server_id)
+    add_override(hidden_id, deny=int(Permission.VIEW_CHANNELS), role_id=default_role_id(server_id))
+
+    assert visible_channels(user_id, server_id) == {text_id}
+
+
+def test_server_filter_must_be_a_uuid():
+    response = client.get(f"/internal/users/{uuid.uuid4()}/visible-channels", params={"server_id": "nope"})
+
+    assert response.status_code == 422
 
 
 # ---------- Permisos ----------

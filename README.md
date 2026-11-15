@@ -122,7 +122,7 @@ Hoy no tienen autenticación: solo se llega a ellos por la red entre nodos.
 | Ruta | Quién la usa | Devuelve |
 |---|---|---|
 | `GET /internal/channels/{id}/access?user_id=` | Chat, al abrir el WebSocket, al pedir el historial, al enviar un mensaje con `@everyone` o una mención de rol, al borrar mensajes o al reaccionar con emojis | `403` si no puede ver el canal o el servidor está suspendido (`server-suspended`); si puede, `server_id`, `can_send`, `muted_until`, `can_mention_everyone` (MENTION_EVERYONE), `mentionable_role_ids` (roles del servidor sin el por defecto; vacío sin ese permiso), `can_manage_messages` (MANAGE_MESSAGES) y `can_add_reactions` (ADD_REACTIONS) |
-| `GET /internal/users/{id}/visible-channels` | Chat, para los no leídos y las menciones (`GET /unread`) | `channel_ids`: canales de texto con VIEW_CHANNELS en todos sus servidores; `role_ids`: sus roles, sin los por defecto |
+| `GET /internal/users/{id}/visible-channels?server_id=` | Chat, para los no leídos y las menciones (`GET /unread`) y para la búsqueda de mensajes (con `server_id`) | `channel_ids`: canales de texto con VIEW_CHANNELS en todos sus servidores, o solo en `server_id` si viene (vacío si no es miembro); `role_ids`: sus roles, sin los por defecto |
 | `GET /internal/servers/{id}/member-ids` | Chat, al recibir `server.updated`, para avisar a los miembros por el inbox | `user_ids` de todos los miembros; `404` si el servidor no existe |
 | `GET /internal/channels/{id}/can-connect?user_id=` | Voice, al unirse a una llamada | Si puede entrar y qué puede publicar (micrófono, cámara, pantalla) |
 | `GET /internal/channels/{id}/can-send?user_id=` | Versiones viejas de Chat | Deprecado: reemplazado por `access` |
