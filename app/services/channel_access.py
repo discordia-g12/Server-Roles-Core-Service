@@ -7,6 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import ALL_PERMISSIONS, Permission, effective_channel_permissions
+from app.exceptions import ServerSuspendedError
 from app.models.server import Server
 from app.repositories.channel_access import ChannelAccessRepository
 from app.repositories.server import ServerRepository
@@ -14,6 +15,7 @@ from app.schemas.internal import (
     CanConnectResponse,
     CanSendResponse,
     ChannelAccessResponse,
+    ServerPermissionsResponse,
     VisibleChannelsResponse,
 )
 
@@ -50,6 +52,10 @@ class ChannelAccessService:
         if not channel:
             raise HTTPException(status_code=404, detail="Channel not found")
         server_id = channel.server_id
+
+        # Servidor suspendido por el staff (ADR-002): nadie lo usa, ni el dueño. Cubre chat, historial y voz
+        if await self.repo.is_server_suspended(db, server_id):
+            raise ServerSuspendedError()
 
         member = await self.repo.get_member(db, server_id, user_id)
         if not member:
@@ -139,6 +145,8 @@ class ChannelAccessService:
         mentionable_role_ids = (
             await self.repo.get_mentionable_role_ids(db, access.server_id) if can_mention_everyone else []
         )
+        can_manage_messages = access.has(Permission.MANAGE_MESSAGES)
+        can_add_reactions = access.has(Permission.ADD_REACTIONS)
 
         return ChannelAccessResponse(
             server_id=str(access.server_id),
@@ -146,6 +154,8 @@ class ChannelAccessService:
             muted_until=muted_until,
             can_mention_everyone=can_mention_everyone,
             mentionable_role_ids=[str(role_id) for role_id in mentionable_role_ids],
+            can_manage_messages=can_manage_messages,
+            can_add_reactions=can_add_reactions,
         )
 
     async def get_visible_text_channels(self, db: AsyncSession, user_id: str) -> VisibleChannelsResponse:
@@ -155,7 +165,8 @@ class ChannelAccessService:
         la lista que mande el cliente. Un baneado deja de ser miembro, así que su servidor no aparece.
         `role_ids` son sus roles (sin los por defecto), para contar las menciones de rol.
         """
-        servers = await ServerRepository().get_user_servers(db, user_id)
+        # Los canales de un servidor suspendido no se leen, así que tampoco cuentan para no leídos
+        servers = [s for s in await ServerRepository().get_user_servers(db, user_id) if not s.is_suspended]
         await self.attach_my_permissions(db, servers, user_id)
         role_ids = await self.repo.get_user_role_ids(db, user_id)
         return VisibleChannelsResponse(
@@ -194,3 +205,50 @@ class ChannelAccessService:
             can_video=access.has(Permission.VIDEO),
             can_screen_share=access.has(Permission.SCREEN_SHARE),
         )
+
+    async def get_server_permissions(
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str
+    ) -> ServerPermissionsResponse:
+        owner_id = await self.repo.get_owner_id(db, server_id)
+        if owner_id is None:
+            raise HTTPException(status_code=404, detail="Server not found")
+
+        # Servidor suspendido por el staff (ADR-002): tampoco se ve su registro de auditoría, ni siquiera el dueño
+        if await self.repo.is_server_suspended(db, server_id):
+            raise ServerSuspendedError()
+
+        if owner_id == user_id:
+            return ServerPermissionsResponse(
+                server_id=str(server_id),
+                user_id=user_id,
+                is_owner=True,
+                can_moderate=True,
+                permissions_bitmask=ALL_PERMISSIONS,
+            )
+
+        member = await self.repo.get_member(db, server_id, user_id)
+        if not member:
+            raise HTTPException(status_code=403, detail="User is not a member of this server")
+
+        roles = await self.repo.get_member_roles(db, member.id)
+        role_bitmasks = [bitmask for _, bitmask in roles]
+        permissions_bitmask = effective_channel_permissions(
+            role_bitmasks=role_bitmasks, role_overrides=[], member_overrides=[]
+        )
+        moderation_bits = (
+            Permission.ADMINISTRATOR.value
+            | Permission.MANAGE_SERVER.value
+            | Permission.BAN_MEMBERS.value
+            | Permission.KICK_MEMBERS.value
+            | Permission.MUTE_MEMBERS.value
+            | Permission.VIEW_AUDIT_LOG.value
+        )
+        can_moderate = bool(permissions_bitmask & moderation_bits)
+        return ServerPermissionsResponse(
+            server_id=str(server_id),
+            user_id=user_id,
+            is_owner=False,
+            can_moderate=can_moderate,
+            permissions_bitmask=permissions_bitmask,
+        )
+

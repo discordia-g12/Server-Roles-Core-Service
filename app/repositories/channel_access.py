@@ -31,6 +31,9 @@ class ChannelAccessRepository:
         )
         return ban_id is not None
 
+    async def is_server_suspended(self, db: AsyncSession, server_id: uuid.UUID) -> bool:
+        return await db.scalar(select(Server.suspended_at).where(Server.id == server_id)) is not None
+
     async def get_owner_id(self, db: AsyncSession, server_id: uuid.UUID) -> str | None:
         return await db.scalar(select(Server.owner_id).where(Server.id == server_id))
 

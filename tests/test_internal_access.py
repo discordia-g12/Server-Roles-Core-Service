@@ -119,6 +119,8 @@ def test_owner_can_view_and_send():
         "muted_until": None,
         "can_mention_everyone": True,
         "mentionable_role_ids": [],
+        "can_manage_messages": True,
+        "can_add_reactions": True,
     }
 
 
@@ -131,6 +133,32 @@ def test_member_with_default_role_can_view_and_send():
 
     assert response.status_code == 200
     assert response.json()["can_send"] is True
+    assert response.json()["can_manage_messages"] is False
+    assert response.json()["can_add_reactions"] is True
+
+
+def test_member_with_manage_messages_can_manage_messages():
+    owner_id = str(uuid.uuid4())
+    server_id, channel_id = create_server(owner_id)
+    user_id, _ = add_member(server_id)
+    set_default_role_permissions(server_id, int(DEFAULT_ROLE_PERMISSIONS | Permission.MANAGE_MESSAGES))
+
+    response = get_access(channel_id, user_id)
+
+    assert response.status_code == 200
+    assert response.json()["can_manage_messages"] is True
+
+
+def test_member_without_add_reactions_cannot_add_reactions():
+    owner_id = str(uuid.uuid4())
+    server_id, channel_id = create_server(owner_id)
+    user_id, _ = add_member(server_id)
+    set_default_role_permissions(server_id, int(DEFAULT_ROLE_PERMISSIONS & ~Permission.ADD_REACTIONS))
+
+    response = get_access(channel_id, user_id)
+
+    assert response.status_code == 200
+    assert response.json()["can_add_reactions"] is False
 
 
 def test_administrator_bypasses_channel_deny():
@@ -144,6 +172,7 @@ def test_administrator_bypasses_channel_deny():
 
     assert response.status_code == 200
     assert response.json()["can_send"] is True
+    assert response.json()["can_manage_messages"] is True
 
 
 # ---------- Muteado: ve el canal pero no escribe ----------
@@ -473,3 +502,75 @@ def test_created_server_includes_my_permissions():
 
     assert response.status_code == 201
     assert response.json()["my_permissions"] == ALL_PERMISSIONS
+
+
+def test_server_member_permissions_owner():
+    owner_id = str(uuid.uuid4())
+    server_id, _ = create_server(owner_id)
+
+    response = client.get(f"/internal/servers/{server_id}/members/{owner_id}/permissions")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_owner"] is True
+    assert data["can_moderate"] is True
+    assert data["permissions_bitmask"] == ALL_PERMISSIONS
+
+
+def test_server_member_permissions_regular_member():
+    owner_id = str(uuid.uuid4())
+    server_id, _ = create_server(owner_id)
+    user_id, _ = add_member(server_id)
+
+    response = client.get(f"/internal/servers/{server_id}/members/{user_id}/permissions")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_owner"] is False
+    assert data["can_moderate"] is False
+    assert data["permissions_bitmask"] == int(DEFAULT_ROLE_PERMISSIONS)
+
+
+def test_server_member_permissions_moderator():
+    owner_id = str(uuid.uuid4())
+    server_id, _ = create_server(owner_id)
+    user_id, _ = add_member(server_id)
+
+    role_res = client.post(
+        f"/api/v1/servers/{server_id}/roles",
+        json={"name": "Mod"},
+        headers=headers_for(owner_id),
+    )
+    role_id = role_res.json()["id"]
+    client.patch(
+        f"/api/v1/servers/{server_id}/roles/{role_id}/permissions",
+        json={"new_permissions_bitmask": Permission.BAN_MEMBERS.value},
+        headers=headers_for(owner_id),
+    )
+    client.put(
+        f"/api/v1/servers/{server_id}/roles/{role_id}/members/{user_id}",
+        headers=headers_for(owner_id),
+    )
+
+    response = client.get(f"/internal/servers/{server_id}/members/{user_id}/permissions")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_owner"] is False
+    assert data["can_moderate"] is True
+    assert data["permissions_bitmask"] & Permission.BAN_MEMBERS.value
+
+
+def test_server_member_permissions_not_member_returns_403():
+    owner_id = str(uuid.uuid4())
+    server_id, _ = create_server(owner_id)
+    stranger_id = str(uuid.uuid4())
+
+    response = client.get(f"/internal/servers/{server_id}/members/{stranger_id}/permissions")
+    assert response.status_code == 403
+
+
+def test_server_member_permissions_unknown_server_returns_404():
+    unknown_server = str(uuid.uuid4())
+    user_id = str(uuid.uuid4())
+
+    response = client.get(f"/internal/servers/{unknown_server}/members/{user_id}/permissions")
+    assert response.status_code == 404
+

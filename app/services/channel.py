@@ -43,7 +43,7 @@ class ChannelService:
             )
 
         return await self.repo.create_channel(
-            db, server_id, channel_data.name, channel_data.type, channel_data.category_id
+            db, server_id, channel_data.name, channel_data.type, channel_data.category_id, created_by=user_id
         )
 
     async def delete_channel(
@@ -63,7 +63,7 @@ class ChannelService:
                 detail="Channel not found."
             )
 
-        await self.repo.delete_channel(db, channel)
+        await self.repo.delete_channel(db, channel, deleted_by=user_id)
 
     async def reorder_channels(
         self, db: AsyncSession, server_id: uuid.UUID, user_id: str, reorder: ChannelReorder
@@ -144,4 +144,4 @@ class ChannelService:
                     detail="A channel with that name already exists in this category."
                 )
 
-        return await self.repo.update_channel(db, channel, update_data)
+        return await self.repo.update_channel(db, channel, update_data, updated_by=user_id)

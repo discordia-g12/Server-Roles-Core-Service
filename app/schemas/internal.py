@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ChannelAccessResponse(BaseModel):
@@ -11,6 +11,10 @@ class ChannelAccessResponse(BaseModel):
     can_mention_everyone: bool = False
     # Roles del servidor que se pueden mencionar (todos menos el por defecto, que es @everyone)
     mentionable_role_ids: list[str] = []
+    # MANAGE_MESSAGES en el canal: autoriza a moderadores a borrar mensajes de otros
+    can_manage_messages: bool = False
+    # ADD_REACTIONS en el canal: autoriza a agregar reacciones
+    can_add_reactions: bool = False
 
 
 class VisibleChannelsResponse(BaseModel):
@@ -33,3 +37,47 @@ class CanConnectResponse(BaseModel):
     can_speak: bool
     can_video: bool
     can_screen_share: bool
+
+
+class ServerPermissionsResponse(BaseModel):
+    server_id: str
+    user_id: str
+    is_owner: bool
+    can_moderate: bool
+    permissions_bitmask: int
+
+
+class ServerMemberIdsResponse(BaseModel):
+    server_id: str
+    # Ids de usuario de todos los miembros, incluido el dueño
+    user_ids: list[str]
+
+
+class ServersCreatedMetricsResponse(BaseModel):
+    """Notification-Audit-Metrics: servidores creados en [from, to), para las métricas del backoffice."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    # ISO 8601 en UTC con "Z", el mismo período que se pidió
+    from_: str = Field(alias="from")
+    to: str
+    # Incluye los suspendidos. Los borrados no: el borrado es físico
+    servers_created: int = Field(alias="serversCreated")
+
+
+class DailyCountResponse(BaseModel):
+    date: str
+    count: int
+
+
+class ServerActivityMetricsInternalResponse(BaseModel):
+    """Notification-Audit-Metrics: canales y nuevos miembros del servidor en [from, to)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    server_id: str = Field(alias="serverId")
+    from_: str = Field(alias="from")
+    to: str
+    channel_ids: list[str] = Field(alias="channelIds")
+    new_members: int = Field(alias="newMembers")
+    daily_new_members: list[DailyCountResponse] = Field(alias="dailyNewMembers")

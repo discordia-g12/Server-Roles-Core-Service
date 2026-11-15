@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +31,7 @@ class RoleRepository:
         return (max_pos + 1) if max_pos is not None else 0
 
     async def create_role(
-        self, db: AsyncSession, server_id: uuid.UUID, name: str, color: str | None
+        self, db: AsyncSession, server_id: uuid.UUID, name: str, color: str | None, created_by: str | None = None
     ) -> Role:
         position = await self.get_next_position(db, server_id)
         role = Role(
@@ -39,55 +40,71 @@ class RoleRepository:
             color=color,
             position=position,
             permissions_bitmask=int(DEFAULT_ROLE_PERMISSIONS),
-            is_default=False
+            is_default=False,
         )
         db.add(role)
+        add_outbox_event(
+            db,
+            "role.created",
+            {
+                "server_id": str(server_id),
+                "role_id": str(role.id),
+                "name": name,
+                "color": color,
+                "created_by": created_by,
+            },
+        )
         await db.commit()
         await db.refresh(role)
         return role
 
-    async def check_user_can_manage_roles(
-        self, db: AsyncSession, server_id: uuid.UUID, user_id: str
-    ) -> bool:
+    async def check_user_can_manage_roles(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> bool:
         server = await db.scalar(select(Server).where(Server.id == server_id))
         if not server:
             return False
         if server.owner_id == user_id:
             return True
-            
+
         query = (
             select(Role.permissions_bitmask)
             .join(RoleAssignment, RoleAssignment.role_id == Role.id)
             .join(ServerMember, ServerMember.id == RoleAssignment.server_member_id)
-            .where(
-                ServerMember.server_id == server_id,
-                ServerMember.user_id == user_id
-            )
+            .where(ServerMember.server_id == server_id, ServerMember.user_id == user_id)
         )
         result = await db.execute(query)
         bitmasks = result.scalars().all()
-        
+
         required_bits = Permission.ADMINISTRATOR | Permission.MANAGE_ROLES
-        
+
         for bitmask in bitmasks:
             if (bitmask & required_bits.value) != 0:
                 return True
-                
+
         return False
 
-    async def get_role_by_id(
-        self, db: AsyncSession, server_id: uuid.UUID, role_id: uuid.UUID
-    ) -> Role | None:
+    async def get_role_by_id(self, db: AsyncSession, server_id: uuid.UUID, role_id: uuid.UUID) -> Role | None:
         query = select(Role).where(Role.server_id == server_id, Role.id == role_id)
         result = await db.execute(query)
         return result.scalar_one_or_none()
 
-    async def delete_role(self, db: AsyncSession, role: Role) -> None:
-        add_outbox_event(db, "role.deleted", {"server_id": str(role.server_id), "role_id": str(role.id)})
+    async def delete_role(self, db: AsyncSession, role: Role, deleted_by: str | None = None) -> None:
+        add_outbox_event(
+            db,
+            "role.deleted",
+            {
+                "server_id": str(role.server_id),
+                "role_id": str(role.id),
+                "name": role.name,
+                "deleted_by": deleted_by,
+            },
+        )
         await db.delete(role)
         await db.commit()
 
-    async def update_role_permissions(self, db: AsyncSession, role: Role, new_permissions_bitmask: int) -> Role:
+    async def update_role_permissions(
+        self, db: AsyncSession, role: Role, new_permissions_bitmask: int, updated_by: str | None = None
+    ) -> Role:
+        old_permissions_bitmask = role.permissions_bitmask
         role.permissions_bitmask = new_permissions_bitmask
         db.add(role)
         add_outbox_event(
@@ -96,7 +113,12 @@ class RoleRepository:
             {
                 "server_id": str(role.server_id),
                 "role_id": str(role.id),
-                "permissions_bitmask": new_permissions_bitmask,
+                "name": role.name,
+                "old_permissions": old_permissions_bitmask,
+                "new_permissions": new_permissions_bitmask,
+                "old_permissions_bitmask": old_permissions_bitmask,
+                "new_permissions_bitmask": new_permissions_bitmask,
+                "updated_by": updated_by,
             },
         )
         await db.commit()
@@ -109,9 +131,7 @@ class RoleRepository:
             .select_from(RoleAssignment)
             .join(ServerMember, ServerMember.id == RoleAssignment.server_member_id)
             .where(
-                ServerMember.server_id == server_id,
-                ServerMember.user_id == user_id,
-                RoleAssignment.role_id == role_id
+                ServerMember.server_id == server_id, ServerMember.user_id == user_id, RoleAssignment.role_id == role_id
             )
         )
         result = await db.execute(query)
@@ -124,14 +144,11 @@ class RoleRepository:
         query = (
             select(ServerMember)
             .join(RoleAssignment, RoleAssignment.server_member_id == ServerMember.id)
-            .where(
-                ServerMember.server_id == server_id,
-                RoleAssignment.role_id == role_id
-            )
+            .where(ServerMember.server_id == server_id, RoleAssignment.role_id == role_id)
         )
         result = await db.execute(query)
         return result.scalars().all()
-    
+
     async def get_member_by_user_id(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> ServerMember | None:
         query = select(ServerMember).where(ServerMember.server_id == server_id, ServerMember.user_id == user_id)
         result = await db.execute(query)
@@ -144,6 +161,7 @@ class RoleRepository:
         role_id: uuid.UUID,
         server_id: uuid.UUID | None = None,
         user_id: str | None = None,
+        assigned_by: str | None = None,
     ) -> None:
         already_assigned = await db.scalar(
             select(func.count())
@@ -165,6 +183,8 @@ class RoleRepository:
         assignment = RoleAssignment(server_member_id=server_member_id, role_id=role_id)
         db.add(assignment)
         if server_id and user_id:
+            role = await db.scalar(select(Role).where(Role.id == role_id))
+            role_name = role.name if role else None
             add_outbox_event(
                 db,
                 "member.role_assigned",
@@ -172,6 +192,8 @@ class RoleRepository:
                     "server_id": str(server_id),
                     "user_id": user_id,
                     "role_id": str(role_id),
+                    "role_name": role_name,
+                    "assigned_by": assigned_by,
                 },
             )
         await db.commit()
@@ -183,6 +205,7 @@ class RoleRepository:
         role_id: uuid.UUID,
         server_id: uuid.UUID | None = None,
         user_id: str | None = None,
+        removed_by: str | None = None,
     ) -> bool:
         query = select(RoleAssignment).where(
             RoleAssignment.server_member_id == server_member_id,
@@ -200,6 +223,8 @@ class RoleRepository:
                 user_id = member.user_id
 
         if server_id and user_id:
+            role = await db.scalar(select(Role).where(Role.id == role_id))
+            role_name = role.name if role else None
             add_outbox_event(
                 db,
                 "member.role_removed",
@@ -207,6 +232,8 @@ class RoleRepository:
                     "server_id": str(server_id),
                     "user_id": user_id,
                     "role_id": str(role_id),
+                    "role_name": role_name,
+                    "removed_by": removed_by,
                 },
             )
 
@@ -215,9 +242,7 @@ class RoleRepository:
         return True
 
     async def set_default_role(self, db: AsyncSession, server_id: uuid.UUID, role: Role) -> Role:
-        previous_default = await db.scalar(
-            select(Role).where(Role.server_id == server_id, Role.is_default.is_(True))
-        )
+        previous_default = await db.scalar(select(Role).where(Role.server_id == server_id, Role.is_default.is_(True)))
         if previous_default and previous_default.id != role.id:
             previous_default.is_default = False
             db.add(previous_default)
@@ -228,12 +253,49 @@ class RoleRepository:
         await db.refresh(role)
         return role
 
-    async def update_role(self, db: AsyncSession, role: Role, name: str | None, color: str | None) -> Role:
-        if name is not None:
+    async def update_role(
+        self, db: AsyncSession, role: Role, name: str | None, color: str | None, updated_by: str | None = None
+    ) -> Role:
+        changes: dict[str, Any] = {}
+        if name is not None and name != role.name:
+            changes["name"] = {"old": role.name, "new": name}
             role.name = name
-        if color is not None:
+        if color is not None and color != role.color:
+            changes["color"] = {"old": role.color, "new": color}
             role.color = color
         db.add(role)
+        if changes:
+            add_outbox_event(
+                db,
+                "role.updated",
+                {
+                    "server_id": str(role.server_id),
+                    "role_id": str(role.id),
+                    "name": role.name,
+                    "changes": changes,
+                    "updated_by": updated_by,
+                },
+            )
         await db.commit()
         await db.refresh(role)
         return role
+
+    async def get_highest_role_position(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> int | None:
+        query = (
+            select(func.max(Role.position))
+            .select_from(RoleAssignment)
+            .join(Role, Role.id == RoleAssignment.role_id)
+            .join(ServerMember, ServerMember.id == RoleAssignment.server_member_id)
+            .where(ServerMember.server_id == server_id, ServerMember.user_id == user_id)
+        )
+        return await db.scalar(query)
+
+    async def reorder_roles(self, db: AsyncSession, server_id: uuid.UUID, ordered_roles: list[Role]) -> list[Role]:
+        for position, role in enumerate(ordered_roles):
+            role.position = position
+            db.add(role)
+        add_outbox_event(db, "roles.reordered", {"server_id": str(server_id)})
+        await db.commit()
+        for role in ordered_roles:
+            await db.refresh(role)
+        return ordered_roles

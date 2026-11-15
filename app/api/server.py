@@ -1,9 +1,11 @@
 import uuid
+from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_id
+from app.api.guards import reject_suspended_server
 from app.db.session import get_db
 from app.repositories.category import CategoryRepository
 from app.repositories.channel import ChannelRepository
@@ -13,8 +15,23 @@ from app.repositories.server import ServerRepository
 from app.schemas.category import CategoryCreate, CategoryReorder, CategoryResponse
 from app.schemas.channel import ChannelCreate, ChannelReorder, ChannelResponse, ChannelUpdate
 from app.schemas.invite import InviteCreate, InviteResponse
-from app.schemas.role import RoleCreate, RoleMemberResponse, RoleResponse, RoleUpdate, RoleUpdatePermissions
-from app.schemas.server import ServerCreate, ServerMemberPage, ServerResponse
+from app.schemas.role import (
+    RoleCreate,
+    RoleMemberResponse,
+    RoleReorder,
+    RoleResponse,
+    RoleUpdate,
+    RoleUpdatePermissions,
+)
+from app.schemas.server import (
+    MemberGrowthResponse,
+    MutualServerResponse,
+    ServerCreate,
+    ServerMemberPage,
+    ServerResponse,
+    ServerUpdate,
+    member_server_view,
+)
 from app.schemas.server_transfer import ServerTransferCreate, ServerTransferResponse
 from app.services.category import CategoryService
 from app.services.channel import ChannelService
@@ -23,7 +40,8 @@ from app.services.role import RoleService
 from app.services.server import ServerService
 from app.services.server_transfer import ServerTransferService
 
-router = APIRouter(prefix="/api/v1", tags=["servers"])
+# Toda ruta con {server_id} pasa por reject_suspended_server: un servidor suspendido no se puede usar (ADR-002)
+router = APIRouter(prefix="/api/v1", tags=["servers"], dependencies=[Depends(reject_suspended_server)])
 
 
 @router.get("/servers", response_model=list[ServerResponse], status_code=200)
@@ -32,7 +50,19 @@ async def get_user_servers_endpoint(
     user_id: str = Depends(get_current_user_id),
 ):
     service = ServerService(ServerRepository())
-    return await service.get_user_servers(db, user_id)
+    return [member_server_view(server) for server in await service.get_user_servers(db, user_id)]
+
+
+# Va antes de las rutas /servers/{server_id}/...: "mutual" no es un id de servidor.
+@router.get("/servers/mutual/{user_id}", response_model=list[MutualServerResponse], status_code=200)
+async def get_mutual_servers_endpoint(
+    user_id: str,
+    db: AsyncSession = Depends(get_db),
+    viewer_id: str = Depends(get_current_user_id),
+):
+    """Servidores del usuario autenticado donde también está user_id (perfil público)."""
+    service = ServerService(ServerRepository())
+    return await service.get_mutual_servers(db, viewer_id, user_id)
 
 
 @router.post("/servers", response_model=ServerResponse, status_code=201)
@@ -47,6 +77,19 @@ async def create_server_endpoint(
 
     created_server = await service.create_server(db, owner_id=owner_id, server_name=server_data.name, icon=icon)
     return created_server
+
+
+@router.patch("/servers/{server_id}", response_model=ServerResponse, status_code=200)
+async def update_server_endpoint(
+    server_id: uuid.UUID,
+    server_data: ServerUpdate,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Cambia nombre y/o descripción (JSON, solo los campos que se mandan). 403 sin MANAGE_SERVER,
+    422 con datos inválidos (y no se guarda nada)."""
+    service = ServerService(ServerRepository())
+    return await service.update_server(db, server_id=server_id, user_id=user_id, data=server_data)
 
 
 @router.put("/servers/{server_id}/icon", response_model=ServerResponse, status_code=200)
@@ -70,6 +113,29 @@ async def remove_server_icon_endpoint(
     """Quita el ícono. Devuelve el servidor sin ícono."""
     service = ServerService(ServerRepository())
     return await service.remove_icon(db, server_id=server_id, user_id=user_id)
+
+
+@router.put("/servers/{server_id}/banner", response_model=ServerResponse, status_code=200)
+async def update_server_banner_endpoint(
+    server_id: uuid.UUID,
+    banner: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Reemplaza el banner (multipart, campo "banner"). Devuelve el servidor con la URL nueva."""
+    service = ServerService(ServerRepository())
+    return await service.update_banner(db, server_id=server_id, user_id=user_id, banner=banner)
+
+
+@router.delete("/servers/{server_id}/banner", response_model=ServerResponse, status_code=200)
+async def remove_server_banner_endpoint(
+    server_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Quita el banner. Devuelve el servidor sin banner."""
+    service = ServerService(ServerRepository())
+    return await service.remove_banner(db, server_id=server_id, user_id=user_id)
 
 
 @router.get("/servers/{server_id}/members", response_model=ServerMemberPage, status_code=200)
@@ -193,6 +259,17 @@ async def create_role_endpoint(
     return await service.create_role(db, server_id, user_id, role_data)
 
 
+@router.put("/servers/{server_id}/roles/order", response_model=list[RoleResponse], status_code=200)
+async def reorder_roles_endpoint(
+    server_id: uuid.UUID,
+    reorder: RoleReorder,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = RoleService(RoleRepository())
+    return await service.reorder_roles(db, server_id, user_id, reorder)
+
+
 @router.delete("/servers/{server_id}/roles/{role_id}", status_code=204)
 async def delete_role_endpoint(
     server_id: uuid.UUID,
@@ -275,6 +352,16 @@ async def leave_server_endpoint(
 ):
     service = ServerService(ServerRepository())
     await service.leave_server(db, server_id, user_id)
+
+
+@router.delete("/servers/{server_id}", status_code=204)
+async def delete_server_endpoint(
+    server_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = ServerService(ServerRepository())
+    await service.delete_server(db, server_id, user_id)
 
 
 @router.patch("/servers/{server_id}/roles/{role_id}", response_model=RoleResponse, status_code=200)
@@ -430,3 +517,33 @@ async def cancel_transfer_endpoint(
 ):
     service = ServerTransferService()
     return await service.cancel_transfer(db, server_id=server_id, user_id=user_id, transfer_id=transfer_id)
+
+
+@router.get(
+    "/servers/{server_id}/metrics/member-growth",
+    response_model=MemberGrowthResponse,
+    status_code=200,
+)
+@router.get(
+    "/servers/{server_id}/member-growth",
+    response_model=MemberGrowthResponse,
+    status_code=200,
+)
+async def get_member_growth_endpoint(
+    server_id: uuid.UUID,
+    days: int | None = Query(default=None, ge=1, le=365),
+    start_date: date | None = Query(default=None),
+    end_date: date | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    service = ServerService(ServerRepository())
+    return await service.get_member_growth(
+        db=db,
+        server_id=server_id,
+        user_id=user_id,
+        start_date=start_date,
+        end_date=end_date,
+        days=days,
+    )
+

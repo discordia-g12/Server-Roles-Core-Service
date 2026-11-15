@@ -1,13 +1,15 @@
 import uuid
 
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import Permission
 from app.models.role import Role
+from app.models.server import Server
 from app.models.server_member import ServerMember
 from app.repositories.role import RoleRepository
-from app.schemas.role import RoleCreate, RoleUpdate
+from app.schemas.role import RoleCreate, RoleReorder, RoleUpdate
 
 
 class RoleService:
@@ -17,27 +19,18 @@ class RoleService:
     async def _require_manage_permission(self, db: AsyncSession, server_id: uuid.UUID, user_id: str) -> None:
         has_permission = await self.repo.check_user_can_manage_roles(db, server_id, user_id)
         if not has_permission:
-            raise HTTPException(
-                status_code=403,
-                detail="You do not have permissions to manage roles in this server."
-            )
+            raise HTTPException(status_code=403, detail="You do not have permissions to manage roles in this server.")
 
     async def _get_role(self, db: AsyncSession, server_id: uuid.UUID, role_id: uuid.UUID) -> Role:
         role = await self.repo.get_role_by_id(db, server_id, role_id)
         if not role:
-            raise HTTPException(
-                status_code=404,
-                detail="Role not found."
-            )
+            raise HTTPException(status_code=404, detail="Role not found.")
         return role
 
     async def _get_member(self, db: AsyncSession, server_id: uuid.UUID, target_user_id: str) -> ServerMember:
         member = await self.repo.get_member_by_user_id(db, server_id, target_user_id)
         if not member:
-            raise HTTPException(
-                status_code=404,
-                detail="Member not found."
-            )
+            raise HTTPException(status_code=404, detail="Member not found.")
         return member
 
     async def get_roles(self, db: AsyncSession, server_id: uuid.UUID, user_id: str):
@@ -46,25 +39,18 @@ class RoleService:
             raise HTTPException(status_code=403, detail="You are not a member of this server.")
         return await self.repo.get_roles_by_server(db, server_id)
 
-    async def create_role(
-        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_data: RoleCreate
-    ):
+    async def create_role(self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_data: RoleCreate):
         await self._require_manage_permission(db, server_id, user_id)
-        return await self.repo.create_role(db, server_id, role_data.name, role_data.color)
+        return await self.repo.create_role(db, server_id, role_data.name, role_data.color, created_by=user_id)
 
-    async def delete_role(
-        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_id: uuid.UUID
-    ):
+    async def delete_role(self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_id: uuid.UUID):
         await self._require_manage_permission(db, server_id, user_id)
         role = await self._get_role(db, server_id, role_id)
 
         if role.is_default:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot delete the default server role."
-            )
+            raise HTTPException(status_code=400, detail="Cannot delete the default server role.")
 
-        await self.repo.delete_role(db, role)
+        await self.repo.delete_role(db, role, deleted_by=user_id)
 
     async def update_role_permissions(
         self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_id: uuid.UUID, new_permissions_bitmask: int
@@ -78,10 +64,9 @@ class RoleService:
             is_its_own_role = await self.repo.user_has_role(db, server_id, user_id, role_id)
             if is_its_own_role:
                 raise HTTPException(
-                    status_code=403,
-                    detail="You cannot remove the ADMINISTRATOR permission from your own role"
+                    status_code=403, detail="You cannot remove the ADMINISTRATOR permission from your own role"
                 )
-        await self.repo.update_role_permissions(db, role, new_permissions_bitmask)
+        await self.repo.update_role_permissions(db, role, new_permissions_bitmask, updated_by=user_id)
         return role
 
     async def get_members_by_role(self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_id: uuid.UUID):
@@ -96,7 +81,9 @@ class RoleService:
         await self._get_role(db, server_id, role_id)
         member = await self._get_member(db, server_id, target_user_id)
 
-        await self.repo.assign_role(db, member.id, role_id, server_id=server_id, user_id=target_user_id)
+        await self.repo.assign_role(
+            db, member.id, role_id, server_id=server_id, user_id=target_user_id, assigned_by=user_id
+        )
 
     async def remove_role_from_member(
         self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_id: uuid.UUID, target_user_id: str
@@ -106,17 +93,12 @@ class RoleService:
         member = await self._get_member(db, server_id, target_user_id)
 
         removed = await self.repo.remove_role_assignment(
-            db, member.id, role_id, server_id=server_id, user_id=target_user_id
+            db, member.id, role_id, server_id=server_id, user_id=target_user_id, removed_by=user_id
         )
         if not removed:
-            raise HTTPException(
-                status_code=404,
-                detail="Member does not have this role assigned."
-            )
+            raise HTTPException(status_code=404, detail="Member does not have this role assigned.")
 
-    async def set_default_role(
-        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_id: uuid.UUID
-    ):
+    async def set_default_role(self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_id: uuid.UUID):
         await self._require_manage_permission(db, server_id, user_id)
         role = await self._get_role(db, server_id, role_id)
         return await self.repo.set_default_role(db, server_id, role)
@@ -127,8 +109,51 @@ class RoleService:
         await self._require_manage_permission(db, server_id, user_id)
         role = await self._get_role(db, server_id, role_id)
         if role.is_default and update_data.name is not None and update_data.name != role.name:
-            raise HTTPException(
-                status_code=400,
-                detail="Cannot change the name of the default server role."
-            )
-        return await self.repo.update_role(db, role, update_data.name, update_data.color)
+            raise HTTPException(status_code=400, detail="Cannot change the name of the default server role.")
+        return await self.repo.update_role(db, role, update_data.name, update_data.color, updated_by=user_id)
+
+    async def reorder_roles(
+        self, db: AsyncSession, server_id: uuid.UUID, user_id: str, reorder_data: RoleReorder
+    ) -> list[Role]:
+        server = await db.scalar(select(Server).where(Server.id == server_id))
+        if not server:
+            raise HTTPException(status_code=404, detail="Server not found.")
+
+        if not await self.repo.is_member(db, server_id, user_id):
+            raise HTTPException(status_code=403, detail="You are not a member of this server.")
+
+        can_manage = await self.repo.check_user_can_manage_roles(db, server_id, user_id)
+        if not can_manage:
+            raise HTTPException(status_code=403, detail="You do not have permissions to manage roles in this server.")
+
+        roles = await self.repo.get_roles_by_server(db, server_id)
+        roles_by_id = {r.id: r for r in roles}
+        requested_ids = reorder_data.get_role_ids()
+
+        if len(set(requested_ids)) != len(requested_ids) or set(requested_ids) != roles_by_id.keys():
+            raise HTTPException(status_code=400, detail="The order must include every role of the server exactly once.")
+
+        # Restricción sobre roles superiores (CA 2):
+        # El dueño del servidor puede reordenar cualquier rol.
+        # Un miembro que no es dueño no puede modificar roles que estén por encima o igual a su rol más alto.
+        if server.owner_id != user_id:
+            actor_highest_pos = await self.repo.get_highest_role_position(db, server_id, user_id)
+            if actor_highest_pos is None:
+                raise HTTPException(status_code=403, detail="You cannot reorder roles without having an assigned role.")
+
+            for new_pos, role_id in enumerate(requested_ids):
+                role = roles_by_id[role_id]
+                old_pos = role.position
+
+                if old_pos >= actor_highest_pos and new_pos != old_pos:
+                    raise HTTPException(
+                        status_code=403,
+                        detail="You cannot reorder a role that is at or above your own in the hierarchy.",
+                    )
+                if old_pos < actor_highest_pos and new_pos >= actor_highest_pos:
+                    raise HTTPException(
+                        status_code=403, detail="You cannot move a role above or equal to your own in the hierarchy."
+                    )
+
+        ordered_roles = [roles_by_id[rid] for rid in requested_ids]
+        return await self.repo.reorder_roles(db, server_id, ordered_roles)
