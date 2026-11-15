@@ -18,7 +18,7 @@ class ChannelAccessResponse(BaseModel):
 
 
 class VisibleChannelsResponse(BaseModel):
-    # Canales de texto con VIEW_CHANNELS, de todos los servidores donde es miembro
+    # Canales de texto con VIEW_CHANNELS, de todos los servidores donde es miembro (o solo del pedido)
     channel_ids: list[str]
     # Roles del usuario en esos servidores, sin el por defecto: Chat cuenta con esto las menciones de rol
     role_ids: list[str] = []
