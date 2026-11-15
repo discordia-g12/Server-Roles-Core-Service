@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -73,6 +74,7 @@ jobs:
     # PR: construye la imagen para validar el Dockerfile. Push a main/develop: además la publica en GHCR
     # con el SHA del commit (lo que se despliega) y el nombre de la rama. Sin "latest".
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: test
     permissions:
       contents: read
