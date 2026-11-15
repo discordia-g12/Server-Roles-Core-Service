@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [ "main", "develop" ]
 
+# Un push nuevo a un PR cancela el run anterior del mismo PR. Cada push a main/develop tiene su propio grupo
+# (el run_id): nunca se cancela ni se descarta uno que publica una imagen o despliega.
+concurrency:
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -37,9 +43,7 @@ jobs:
           cache: "pip"
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+        run: pip install -r requirements-dev.txt
 
       - name: Lint (ruff)
         run: ruff check .
@@ -69,10 +73,14 @@ jobs:
         with:
           name: coverage-report
           path: coverage.xml
+          retention-days: 7
 
   docker:
-    # PR: construye la imagen para validar el Dockerfile. Push a main/develop: además la publica en GHCR
-    # con el SHA del commit (lo que se despliega) y el nombre de la rama. Sin "latest".
+    # Construye la imagen y la publica en GHCR con el SHA del commit (lo que se despliega) y el nombre de la
+    # rama. Sin "latest". Solo en push a main/develop: en los PRs no corre, para no gastar un build por cada
+    # push (el Dockerfile se valida al mergear a develop). La excepción son los PRs de Dependabot que cambian
+    # la imagen base: se construyen (sin publicar) antes de mergear.
+    if: github.event_name == 'push' || startsWith(github.head_ref, 'dependabot/docker/')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     needs: test
