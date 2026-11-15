@@ -6,6 +6,7 @@ from datetime import datetime
 from sqlalchemy import update
 
 from app.models.server import Server
+from app.models.server_member_event import ServerMemberEvent
 from tests.test_internal_access import _run, client, create_server
 
 # Un período en el pasado: ningún otro test crea servidores ahí (todos usan now())
@@ -101,3 +102,80 @@ def test_from_after_to_is_400():
 def test_invalid_dates_are_422():
     assert servers_created("ayer", "2001-03-10T00:00:00Z").status_code == 422
     assert client.get("/internal/metrics/servers", params={"from": "2001-03-10T00:00:00Z"}).status_code == 422
+
+
+def test_server_activity_metrics_returns_channels_and_new_members():
+    server_id, _ = create_server(str(uuid.uuid4()))
+
+    async def _seed_joins(db):
+        await db.execute(
+            update(ServerMemberEvent)
+            .where(ServerMemberEvent.server_id == uuid.UUID(server_id))
+            .values(created_at=datetime(2005, 1, 1, 10, 0, 0))
+        )
+        db.add_all([
+            ServerMemberEvent(
+                server_id=uuid.UUID(server_id),
+                user_id="auth0|before",
+                event_type="join",
+                created_at=datetime(2005, 1, 4, 23, 59, 59),
+            ),
+            ServerMemberEvent(
+                server_id=uuid.UUID(server_id),
+                user_id="auth0|u1",
+                event_type="join",
+                created_at=datetime(2005, 1, 5, 0, 0, 0),
+            ),
+            ServerMemberEvent(
+                server_id=uuid.UUID(server_id),
+                user_id="auth0|u2",
+                event_type="join",
+                created_at=datetime(2005, 1, 6, 12, 0, 0),
+            ),
+            ServerMemberEvent(
+                server_id=uuid.UUID(server_id),
+                user_id="auth0|u2",
+                event_type="leave",
+                created_at=datetime(2005, 1, 6, 15, 0, 0),
+            ),
+            ServerMemberEvent(
+                server_id=uuid.UUID(server_id),
+                user_id="auth0|at-to",
+                event_type="join",
+                created_at=datetime(2005, 1, 7, 0, 0, 0),
+            ),
+        ])
+        await db.commit()
+
+    _run(_seed_joins)
+
+    response = client.get(
+        f"/internal/metrics/servers/{server_id}",
+        params={"from": "2005-01-05T00:00:00Z", "to": "2005-01-07T00:00:00Z"},
+    )
+    assert response.status_code == 200, response.json()
+    body = response.json()
+    assert body["serverId"] == server_id
+    assert body["from"] == "2005-01-05T00:00:00.000Z"
+    assert body["to"] == "2005-01-07T00:00:00.000Z"
+    assert len(body["channelIds"]) == 2
+    assert body["newMembers"] == 2
+    assert body["dailyNewMembers"] == [
+        {"date": "2005-01-05", "count": 1},
+        {"date": "2005-01-06", "count": 1},
+    ]
+
+
+def test_server_activity_metrics_404_and_400():
+    missing = client.get(
+        f"/internal/metrics/servers/{uuid.uuid4()}",
+        params={"from": "2005-01-05T00:00:00Z", "to": "2005-01-07T00:00:00Z"},
+    )
+    assert missing.status_code == 404
+
+    server_id, _ = create_server(str(uuid.uuid4()))
+    bad_range = client.get(
+        f"/internal/metrics/servers/{server_id}",
+        params={"from": "2005-01-07T00:00:00Z", "to": "2005-01-07T00:00:00Z"},
+    )
+    assert bad_range.status_code == 400

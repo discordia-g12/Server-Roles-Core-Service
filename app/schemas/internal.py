@@ -63,3 +63,21 @@ class ServersCreatedMetricsResponse(BaseModel):
     to: str
     # Incluye los suspendidos. Los borrados no: el borrado es físico
     servers_created: int = Field(alias="serversCreated")
+
+
+class DailyCountResponse(BaseModel):
+    date: str
+    count: int
+
+
+class ServerActivityMetricsInternalResponse(BaseModel):
+    """Notification-Audit-Metrics: canales y nuevos miembros del servidor en [from, to)."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    server_id: str = Field(alias="serverId")
+    from_: str = Field(alias="from")
+    to: str
+    channel_ids: list[str] = Field(alias="channelIds")
+    new_members: int = Field(alias="newMembers")
+    daily_new_members: list[DailyCountResponse] = Field(alias="dailyNewMembers")
