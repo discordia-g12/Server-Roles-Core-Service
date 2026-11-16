@@ -14,6 +14,7 @@ from app.repositories.role import RoleRepository
 from app.repositories.server import ServerRepository
 from app.schemas.category import CategoryCreate, CategoryReorder, CategoryResponse
 from app.schemas.channel import ChannelCreate, ChannelReorder, ChannelResponse, ChannelUpdate
+from app.schemas.channel_permission import ChannelRoleOverrideResponse, ChannelRoleOverrideUpdate
 from app.schemas.invite import InviteCreate, InviteResponse
 from app.schemas.role import (
     RoleCreate,
@@ -35,6 +36,7 @@ from app.schemas.server import (
 from app.schemas.server_transfer import ServerTransferCreate, ServerTransferResponse
 from app.services.category import CategoryService
 from app.services.channel import ChannelService
+from app.services.channel_permission import ChannelPermissionService
 from app.services.invite import InviteService
 from app.services.role import RoleService
 from app.services.server import ServerService
@@ -193,6 +195,52 @@ async def reorder_channels_endpoint(
 ):
     service = ChannelService(ChannelRepository())
     return await service.reorder_channels(db, server_id, user_id, reorder)
+
+
+@router.get(
+    "/servers/{server_id}/channels/{channel_id}/permissions/roles",
+    response_model=list[ChannelRoleOverrideResponse],
+    status_code=200,
+)
+async def list_channel_role_overrides_endpoint(
+    server_id: uuid.UUID,
+    channel_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Excepciones de permisos de los roles en el canal. Un rol sin excepción no aparece."""
+    return await ChannelPermissionService().list_role_overrides(db, server_id, user_id, channel_id)
+
+
+@router.put(
+    "/servers/{server_id}/channels/{channel_id}/permissions/roles/{role_id}",
+    response_model=ChannelRoleOverrideResponse,
+    status_code=200,
+)
+async def set_channel_role_override_endpoint(
+    server_id: uuid.UUID,
+    channel_id: uuid.UUID,
+    role_id: uuid.UUID,
+    override_data: ChannelRoleOverrideUpdate,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Crea o reemplaza la excepción de permisos del rol en el canal (solo vale en ese canal)."""
+    return await ChannelPermissionService().set_role_override(
+        db, server_id, user_id, channel_id, role_id, override_data
+    )
+
+
+@router.delete("/servers/{server_id}/channels/{channel_id}/permissions/roles/{role_id}", status_code=204)
+async def delete_channel_role_override_endpoint(
+    server_id: uuid.UUID,
+    channel_id: uuid.UUID,
+    role_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    """Quita la excepción: el rol vuelve a tener en el canal sus permisos generales."""
+    await ChannelPermissionService().delete_role_override(db, server_id, user_id, channel_id, role_id)
 
 
 @router.post("/servers/{server_id}/categories", response_model=CategoryResponse, status_code=201)
