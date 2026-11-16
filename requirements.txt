@@ -1,12 +1,12 @@
 # Dependencias de runtime (las que instala la imagen de producción), fijadas con las versiones que corren hoy.
 # Herramientas de test/lint/seguridad: requirements-dev.txt. Las actualiza Dependabot con un PR.
-fastapi==0.162.2
+fastapi==0.162.7
 uvicorn[standard]==0.54.0
-pydantic-settings==2.16.2
+pydantic-settings==2.16.3
 sqlalchemy[asyncio]==2.1.8
 asyncpg==0.32.0
 alembic==1.20.1
 python-multipart==0.0.33
 aio-pika==10.2.3
-boto3==1.43.126  # íconos de servidor en S3
+boto3==1.44.2  # íconos de servidor en S3
 Pillow==13.0.0  # validación y normalización de imágenes
