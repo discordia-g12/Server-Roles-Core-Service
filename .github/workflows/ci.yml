@@ -34,7 +34,7 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v7
@@ -92,9 +92,9 @@ jobs:
       PUSH: ${{ github.event_name == 'push' }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKER_USERNAME }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       # evita el límite de descargas anónimas de Docker Hub (imágenes base)
       - name: Log in to Docker Hub
