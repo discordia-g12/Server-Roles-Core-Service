@@ -6,5 +6,5 @@ pytest-cov==7.1.0
 httpx==0.28.1  # lo usa el TestClient de FastAPI
 
 # Lint y SAST
-ruff==0.17.4
+ruff==0.17.5
 bandit==1.9.4
