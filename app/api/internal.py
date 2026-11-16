@@ -38,11 +38,13 @@ async def channel_access(
 @router.get("/users/{user_id}/visible-channels", response_model=VisibleChannelsResponse, status_code=200)
 async def visible_channels(
     user_id: str,
+    server_id: uuid.UUID | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     """Chat: los canales de texto que el usuario puede ver y sus roles, para calcular no leídos y menciones.
-    200 con listas vacías si no es miembro de ningún servidor."""
-    return await ChannelAccessService().get_visible_text_channels(db, user_id)
+    Con `server_id`, solo los de ese servidor (búsqueda de mensajes). 200 con listas vacías si no es miembro
+    de ningún servidor (o de ese)."""
+    return await ChannelAccessService().get_visible_text_channels(db, user_id, server_id)
 
 
 @router.get("/channels/{channel_id}/can-send", response_model=CanSendResponse, status_code=200)

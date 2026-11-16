@@ -158,15 +158,22 @@ class ChannelAccessService:
             can_add_reactions=can_add_reactions,
         )
 
-    async def get_visible_text_channels(self, db: AsyncSession, user_id: str) -> VisibleChannelsResponse:
-        """Canales de texto que el usuario puede ver (VIEW_CHANNELS) en todos sus servidores.
+    async def get_visible_text_channels(
+        self, db: AsyncSession, user_id: str, server_id: uuid.UUID | None = None
+    ) -> VisibleChannelsResponse:
+        """Canales de texto que el usuario puede ver (VIEW_CHANNELS) en todos sus servidores, o solo en
+        `server_id` si viene.
 
-        Chat lo usa para los no leídos: así cuenta solo los canales que el usuario puede leer, sin confiar en
-        la lista que mande el cliente. Un baneado deja de ser miembro, así que su servidor no aparece.
-        `role_ids` son sus roles (sin los por defecto), para contar las menciones de rol.
+        Chat lo usa para los no leídos y para la búsqueda de mensajes: así lee solo los canales que el usuario
+        puede ver, sin confiar en la lista que mande el cliente. Un baneado deja de ser miembro, así que su
+        servidor no aparece. `role_ids` son sus roles (sin los por defecto), para contar las menciones de rol.
         """
-        # Los canales de un servidor suspendido no se leen, así que tampoco cuentan para no leídos
-        servers = [s for s in await ServerRepository().get_user_servers(db, user_id) if not s.is_suspended]
+        # Los canales de un servidor suspendido no se leen, así que tampoco cuentan para no leídos ni búsquedas
+        servers = [
+            s
+            for s in await ServerRepository().get_user_servers(db, user_id)
+            if not s.is_suspended and (server_id is None or s.id == server_id)
+        ]
         await self.attach_my_permissions(db, servers, user_id)
         role_ids = await self.repo.get_user_role_ids(db, user_id)
         return VisibleChannelsResponse(
