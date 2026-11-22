@@ -40,7 +40,10 @@ async def hide_from_everyone(db_session, server_id: str, channel_id: str) -> Non
     )
     db_session.add(
         ChannelPermissionOverride(
-            channel_id=uuid.UUID(channel_id), role_id=everyone_id, allow_bitmask=0, deny_bitmask=int(Permission.VIEW_CHANNELS)
+            channel_id=uuid.UUID(channel_id),
+            role_id=everyone_id,
+            allow_bitmask=0,
+            deny_bitmask=int(Permission.VIEW_CHANNELS),
         )
     )
     await db_session.commit()
