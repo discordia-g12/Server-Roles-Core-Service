@@ -156,12 +156,15 @@ Exchange `server.events` (topic). La routing key es el tipo de evento:
 - canales y categorías: `channel.created`, `channel.updated`, `channel.deleted`, `channels.reordered` y lo
   mismo para `category.*`;
 - roles: `role.permissions_updated` y `role.deleted`;
-- miembros: `member.role_assigned`, `member.role_removed`, `member.left`, `member.kicked`,
-  `member.banned`, `member.unbanned`, `member.muted` y `member.unmuted`;
+- miembros: `member.joined` (`{ server_id, user_id, channel_id }`, al unirse con una invitación; `channel_id` es
+  el canal de bienvenida: el primer canal de texto de la barra lateral que ve @everyone, o `null` si no hay),
+  `member.role_assigned`, `member.role_removed`, `member.left`, `member.kicked`, `member.banned`,
+  `member.unbanned`, `member.muted` y `member.unmuted`;
 - servidor: `server.suspended` (con `server_id`, `voice_channel_ids`, `reason`, `suspended_by`, `suspended_at`) y
   `server.unsuspended`.
 
-Chat-Engine consume `member.*` (cierra sesiones, habilita o bloquea el envío), `server.updated` (avisa a los
+Chat-Engine consume `member.*` (cierra sesiones, habilita o bloquea el envío, y con `member.joined` publica
+"se unió …" en el canal de bienvenida), `server.updated` (avisa a los
 miembros por su inbox, ADR 0013 de `org-docs`) y `server.suspended` (cierra las sesiones del servidor).
 Voice-Signaling consume `member.banned`, `member.kicked` y `member.left` (saca de la llamada) y
 `server.suspended` / `server.unsuspended`.
