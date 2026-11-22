@@ -4,9 +4,12 @@ ahí "se unió …"): el primer canal de texto de la barra lateral que ve @every
 import uuid
 
 import pytest
+from sqlalchemy import select
 
 from app.core.permissions import Permission
-from tests.test_internal_access import add_override, client, create_server, default_role_id, headers_for
+from app.models.channel_permission_override import ChannelPermissionOverride
+from app.models.role import Role
+from tests.test_internal_access import client, create_server, headers_for
 from tests.test_outbox_events import events_for_server
 
 
@@ -29,8 +32,18 @@ def create_text_channel(server_id: str, owner_id: str, name: str) -> str:
     return response.json()["id"]
 
 
-def hide_from_everyone(server_id: str, channel_id: str) -> None:
-    add_override(channel_id, deny=int(Permission.VIEW_CHANNELS), role_id=default_role_id(server_id))
+async def hide_from_everyone(db_session, server_id: str, channel_id: str) -> None:
+    """Le niega VIEW_CHANNELS a @everyone en el canal. Con la sesión del test: los helpers de
+    test_internal_access usan asyncio.run(), que no anda dentro de un test async."""
+    everyone_id = await db_session.scalar(
+        select(Role.id).where(Role.server_id == uuid.UUID(server_id), Role.is_default.is_(True))
+    )
+    db_session.add(
+        ChannelPermissionOverride(
+            channel_id=uuid.UUID(channel_id), role_id=everyone_id, allow_bitmask=0, deny_bitmask=int(Permission.VIEW_CHANNELS)
+        )
+    )
+    await db_session.commit()
 
 
 async def joined_events(db_session, server_id: str):
@@ -55,7 +68,7 @@ async def test_join_writes_member_joined_with_the_first_text_channel(db_session)
 async def test_welcome_channel_skips_channels_everyone_cannot_see(db_session):
     owner_id = str(uuid.uuid4())
     server_id, general_id = create_server(owner_id)
-    hide_from_everyone(server_id, general_id)
+    await hide_from_everyone(db_session, server_id, general_id)
     lobby_id = create_text_channel(server_id, owner_id, "lobby")
 
     join(create_invite(server_id, owner_id), str(uuid.uuid4()))
@@ -68,7 +81,7 @@ async def test_welcome_channel_skips_channels_everyone_cannot_see(db_session):
 async def test_without_a_channel_everyone_can_see_the_event_has_no_channel(db_session):
     owner_id = str(uuid.uuid4())
     server_id, general_id = create_server(owner_id)
-    hide_from_everyone(server_id, general_id)
+    await hide_from_everyone(db_session, server_id, general_id)
 
     join(create_invite(server_id, owner_id), str(uuid.uuid4()))
 
