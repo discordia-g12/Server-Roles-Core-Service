@@ -4,6 +4,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 
+from app.models.category import Category
 from app.models.channel import Channel
 from app.models.channel_permission_override import ChannelPermissionOverride
 from app.models.role import Role
@@ -91,6 +92,31 @@ class ChannelAccessRepository:
             select(ChannelPermissionOverride).where(
                 ChannelPermissionOverride.channel_id.in_(channel_ids),
                 or_(*conditions),
+            )
+        )
+        return list(result.scalars().all())
+
+    async def get_text_channels_in_sidebar_order(self, db: AsyncSession, server_id: uuid.UUID) -> list[Channel]:
+        """Canales de texto en el orden de la barra lateral: primero los sin categoría, después cada
+        categoría por su posición, y adentro por la posición del canal."""
+        result = await db.execute(
+            select(Channel)
+            .outerjoin(Category, Category.id == Channel.category_id)
+            .where(Channel.server_id == server_id, Channel.type == "text")
+            .order_by(Channel.category_id.is_not(None), Category.position, Channel.position, Channel.id)
+        )
+        return list(result.scalars().all())
+
+    async def get_role_overrides_for_channels(
+        self, db: AsyncSession, channel_ids: list[uuid.UUID], role_id: uuid.UUID
+    ) -> list[ChannelPermissionOverride]:
+        """Reglas de un rol en varios canales, en una sola consulta."""
+        if not channel_ids:
+            return []
+        result = await db.execute(
+            select(ChannelPermissionOverride).where(
+                ChannelPermissionOverride.channel_id.in_(channel_ids),
+                ChannelPermissionOverride.role_id == role_id,
             )
         )
         return list(result.scalars().all())

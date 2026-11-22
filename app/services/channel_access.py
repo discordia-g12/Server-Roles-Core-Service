@@ -158,6 +158,25 @@ class ChannelAccessService:
             can_add_reactions=can_add_reactions,
         )
 
+    async def get_welcome_channel_id(
+        self, db: AsyncSession, server_id: uuid.UUID, default_role_bitmask: int, default_role_id: uuid.UUID
+    ) -> uuid.UUID | None:
+        """Canal donde se avisa que alguien se unió: el primer canal de texto de la barra lateral que el rol
+        por defecto (@everyone) puede ver, así lo ven el que llega y todos los miembros. None si no hay."""
+        channels = await self.repo.get_text_channels_in_sidebar_order(db, server_id)
+        overrides = defaultdict(list)
+        for override in await self.repo.get_role_overrides_for_channels(
+            db, [channel.id for channel in channels], default_role_id
+        ):
+            overrides[override.channel_id].append((override.allow_bitmask, override.deny_bitmask))
+        for channel in channels:
+            permissions = effective_channel_permissions(
+                role_bitmasks=[default_role_bitmask], role_overrides=overrides[channel.id], member_overrides=[]
+            )
+            if permissions & Permission.VIEW_CHANNELS.value:
+                return channel.id
+        return None
+
     async def get_visible_text_channels(
         self, db: AsyncSession, user_id: str, server_id: uuid.UUID | None = None
     ) -> VisibleChannelsResponse:
