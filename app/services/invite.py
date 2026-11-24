@@ -15,6 +15,7 @@ from app.models.server_invite import ServerInvite
 from app.models.server_member import ServerMember
 from app.repositories.invite import InviteRepository
 from app.repositories.outbox import add_outbox_event
+from app.services.channel_access import ChannelAccessService
 
 MAX_RETRIES_CODE = 3
 class InviteService:
@@ -196,9 +197,24 @@ class InviteService:
         await self.repository.create_server_member(db, member)
 
         default_role = await self.repository.get_default_role(db, invite.server_id)
+        welcome_channel_id = None
         if default_role:
             await self.repository.assign_role(db, RoleAssignment(server_member_id=member.id, role_id=default_role.id))
+            welcome_channel_id = await ChannelAccessService().get_welcome_channel_id(
+                db, invite.server_id, default_role.permissions_bitmask, default_role.id
+            )
 
+        # Chat publica ahí "se unió …" (channel_id null: ningún canal que vea todo el servidor). Mismo commit
+        # que el alta (Outbox): si el alta no se guarda, tampoco el aviso
+        add_outbox_event(
+            db,
+            "member.joined",
+            {
+                "server_id": str(invite.server_id),
+                "user_id": user_id,
+                "channel_id": str(welcome_channel_id) if welcome_channel_id else None,
+            },
+        )
         await db.commit()
         return invite.server_id
 

@@ -122,8 +122,10 @@ Hoy no tienen autenticación: solo se llega a ellos por la red entre nodos.
 | Ruta | Quién la usa | Devuelve |
 |---|---|---|
 | `GET /internal/channels/{id}/access?user_id=` | Chat, al abrir el WebSocket, al pedir el historial, al enviar un mensaje con `@everyone` o una mención de rol, al borrar mensajes o al reaccionar con emojis | `403` si no puede ver el canal o el servidor está suspendido (`server-suspended`); si puede, `server_id`, `can_send`, `muted_until`, `can_mention_everyone` (MENTION_EVERYONE), `mentionable_role_ids` (roles del servidor sin el por defecto; vacío sin ese permiso), `can_manage_messages` (MANAGE_MESSAGES) y `can_add_reactions` (ADD_REACTIONS) |
+| `POST /internal/channels/{id}/viewers` | Notification, para no mandar previews de canales privados | Body `{"user_ids": [...]}` (máx. 5000, `422` si hay más). `user_ids`: los de la lista que pueden ver el canal (miembro, no baneado, VIEW_CHANNELS); `404` si el canal no existe |
 | `GET /internal/users/{id}/visible-channels?server_id=` | Chat, para los no leídos y las menciones (`GET /unread`) y para la búsqueda de mensajes (con `server_id`) | `channel_ids`: canales de texto con VIEW_CHANNELS en todos sus servidores, o solo en `server_id` si viene (vacío si no es miembro); `role_ids`: sus roles, sin los por defecto |
 | `GET /internal/servers/{id}/member-ids` | Chat, al recibir `server.updated`, para avisar a los miembros por el inbox | `user_ids` de todos los miembros; `404` si el servidor no existe |
+| `GET /internal/servers/{id}/roles/{role_id}/member-ids` | Notification-Audit-Metrics, para resolver las menciones de rol (`mention_role_ids` de `chat.message.created`) | `user_ids` de los miembros con ese rol; `404` si el servidor no existe o el rol no es de ese servidor |
 | `GET /internal/channels/{id}/can-connect?user_id=` | Voice, al unirse a una llamada | Si puede entrar y qué puede publicar (micrófono, cámara, pantalla) |
 | `GET /internal/channels/{id}/can-send?user_id=` | Versiones viejas de Chat | Deprecado: reemplazado por `access` |
 | `GET /internal/metrics/servers?from=&to=` | Notification-Audit-Metrics, para las métricas globales del backoffice (`GET /api/v1/admin/metrics`) | `{"from", "to", "serversCreated"}`: servidores con `created_at` en `[from, to)`. Ver abajo |
@@ -156,12 +158,15 @@ Exchange `server.events` (topic). La routing key es el tipo de evento:
 - canales y categorías: `channel.created`, `channel.updated`, `channel.deleted`, `channels.reordered` y lo
   mismo para `category.*`;
 - roles: `role.permissions_updated` y `role.deleted`;
-- miembros: `member.role_assigned`, `member.role_removed`, `member.left`, `member.kicked`,
-  `member.banned`, `member.unbanned`, `member.muted` y `member.unmuted`;
+- miembros: `member.joined` (`{ server_id, user_id, channel_id }`, al unirse con una invitación; `channel_id` es
+  el canal de bienvenida: el primer canal de texto de la barra lateral que ve @everyone, o `null` si no hay),
+  `member.role_assigned`, `member.role_removed`, `member.left`, `member.kicked`, `member.banned`,
+  `member.unbanned`, `member.muted` y `member.unmuted`;
 - servidor: `server.suspended` (con `server_id`, `voice_channel_ids`, `reason`, `suspended_by`, `suspended_at`) y
   `server.unsuspended`.
 
-Chat-Engine consume `member.*` (cierra sesiones, habilita o bloquea el envío), `server.updated` (avisa a los
+Chat-Engine consume `member.*` (cierra sesiones, habilita o bloquea el envío, y con `member.joined` publica
+"se unió …" en el canal de bienvenida), `server.updated` (avisa a los
 miembros por su inbox, ADR 0013 de `org-docs`) y `server.suspended` (cierra las sesiones del servidor).
 Voice-Signaling consume `member.banned`, `member.kicked` y `member.left` (saca de la llamada) y
 `server.suspended` / `server.unsuspended`.

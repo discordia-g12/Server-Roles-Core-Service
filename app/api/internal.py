@@ -5,11 +5,15 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.repositories.role import RoleRepository
 from app.repositories.server import ServerRepository
 from app.schemas.internal import (
     CanConnectResponse,
     CanSendResponse,
     ChannelAccessResponse,
+    ChannelViewersRequest,
+    ChannelViewersResponse,
+    RoleMemberIdsResponse,
     ServerActivityMetricsInternalResponse,
     ServerMemberIdsResponse,
     ServerPermissionsResponse,
@@ -17,6 +21,7 @@ from app.schemas.internal import (
     VisibleChannelsResponse,
 )
 from app.services.channel_access import ChannelAccessService
+from app.services.role import RoleService
 from app.services.server import ServerService
 
 # Endpoints que consultan Chat, Voice y Notification-Audit-Metrics (nodo realtime) por el puerto 8002.
@@ -33,6 +38,17 @@ async def channel_access(
     """Chat: abrir el WebSocket y leer el historial. 404 canal inexistente; 403 no miembro, baneado o sin
     VIEW_CHANNELS; 200 con `can_send`, `muted_until`, `can_mention_everyone` y `mentionable_role_ids`."""
     return await ChannelAccessService().get_text_channel_access(db, channel_id, user_id)
+
+
+@router.post("/channels/{channel_id}/viewers", response_model=ChannelViewersResponse, status_code=200)
+async def channel_viewers(
+    channel_id: uuid.UUID,
+    body: ChannelViewersRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Notification: de estos usuarios, cuáles pueden ver el canal (para no mandar previews de canales
+    privados). Máximo 5000 ids (422 si hay más). 404 canal inexistente; 200 con el subconjunto que lo ve."""
+    return await ChannelAccessService().filter_channel_viewers(db, channel_id, body.user_ids)
 
 
 @router.get("/users/{user_id}/visible-channels", response_model=VisibleChannelsResponse, status_code=200)
@@ -76,6 +92,18 @@ async def server_member_ids(
     404 si el servidor no existe."""
     user_ids = await ServerService(ServerRepository()).get_member_user_ids(db, server_id)
     return {"server_id": str(server_id), "user_ids": user_ids}
+
+
+@router.get("/servers/{server_id}/roles/{role_id}/member-ids", response_model=RoleMemberIdsResponse, status_code=200)
+async def role_member_ids(
+    server_id: uuid.UUID,
+    role_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Notification: a quién avisarle de una mención de rol (`mention_role_ids` de chat.message.created).
+    404 si el servidor no existe o el rol no es de ese servidor."""
+    user_ids = await RoleService(RoleRepository()).get_member_user_ids_by_role(db, server_id, role_id)
+    return {"server_id": str(server_id), "role_id": str(role_id), "user_ids": user_ids}
 
 
 @router.get(

@@ -163,3 +163,45 @@ def test_get_role_members_role_belongs_to_another_server():
     response = get_role_members(server_b_id, role_in_server_a, owner_b)
 
     assert response.status_code == 404
+
+
+# --- Interno: resolver una mención de rol (Notification) ---
+
+
+def test_internal_role_member_ids_lists_only_members_with_the_role():
+    owner_id = str(uuid.uuid4())
+    server_id = create_test_server(owner_id)
+    role_id = create_test_role(server_id, owner_id)
+    other_role_id = create_test_role(server_id, owner_id, name="Other")
+    with_role = str(uuid.uuid4())
+    assign_role_to_user(server_id, role_id, with_role)
+    assign_role_to_user(server_id, other_role_id, str(uuid.uuid4()))
+
+    response = client.get(f"/internal/servers/{server_id}/roles/{role_id}/member-ids")
+
+    assert response.status_code == 200, response.json()
+    assert response.json() == {"server_id": server_id, "role_id": role_id, "user_ids": [with_role]}
+
+
+def test_internal_role_member_ids_of_role_without_members_is_empty():
+    owner_id = str(uuid.uuid4())
+    server_id = create_test_server(owner_id)
+    role_id = create_test_role(server_id, owner_id)
+
+    response = client.get(f"/internal/servers/{server_id}/roles/{role_id}/member-ids")
+
+    assert response.status_code == 200
+    assert response.json()["user_ids"] == []
+
+
+def test_internal_role_member_ids_of_role_from_another_server_is_404():
+    owner_id = str(uuid.uuid4())
+    server_id = create_test_server(owner_id)
+    other_server_id = create_test_server(owner_id)
+    role_id = create_test_role(other_server_id, owner_id)
+
+    assert client.get(f"/internal/servers/{server_id}/roles/{role_id}/member-ids").status_code == 404
+
+
+def test_internal_role_member_ids_of_unknown_server_is_404():
+    assert client.get(f"/internal/servers/{uuid.uuid4()}/roles/{uuid.uuid4()}/member-ids").status_code == 404

@@ -15,6 +15,7 @@ from app.schemas.internal import (
     CanConnectResponse,
     CanSendResponse,
     ChannelAccessResponse,
+    ChannelViewersResponse,
     ServerPermissionsResponse,
     VisibleChannelsResponse,
 )
@@ -77,6 +78,52 @@ class ChannelAccessService:
             member_overrides=[(o.allow_bitmask, o.deny_bitmask) for o in overrides if o.server_member_id],
         )
         return ChannelAccess(server_id=server_id, permissions=permissions)
+
+    async def filter_channel_viewers(
+        self, db: AsyncSession, channel_id: uuid.UUID, user_ids: list[str]
+    ) -> ChannelViewersResponse:
+        """Subconjunto de `user_ids` que puede ver el canal: la misma regla que da 403 en /access (miembro,
+        no baneado y VIEW_CHANNELS con roles y overrides), en un número fijo de consultas.
+
+        404 si el canal no existe. Notification lo usa para no mandar previews de canales privados.
+        """
+        channel = await self.repo.get_channel(db, channel_id)
+        if not channel:
+            raise HTTPException(status_code=404, detail="Channel not found")
+        server_id = channel.server_id
+        if await self.repo.is_server_suspended(db, server_id):
+            raise ServerSuspendedError()
+
+        user_ids = list(dict.fromkeys(user_ids))
+        banned = await self.repo.get_banned_user_ids(db, server_id, user_ids)
+        members = await self.repo.get_members_by_user_ids(db, server_id, [u for u in user_ids if u not in banned])
+        if not members:
+            return ChannelViewersResponse(user_ids=[])
+
+        owner_id = await self.repo.get_owner_id(db, server_id)
+        member_ids = [member_id for member_id, _ in members]
+        roles_by_member = defaultdict(list)
+        for member_id, role_id, bitmask in await self.repo.get_roles_for_members(db, member_ids):
+            roles_by_member[member_id].append((role_id, bitmask))
+        role_ids = list({role_id for roles in roles_by_member.values() for role_id, _ in roles})
+        overrides = await self.repo.get_channel_overrides_for_members(db, channel_id, member_ids, role_ids)
+
+        viewers = []
+        for member_id, user_id in members:
+            if user_id != owner_id:
+                roles = roles_by_member[member_id]
+                own_role_ids = {role_id for role_id, _ in roles}
+                permissions = effective_channel_permissions(
+                    role_bitmasks=[bitmask for _, bitmask in roles],
+                    role_overrides=[(o.allow_bitmask, o.deny_bitmask) for o in overrides if o.role_id in own_role_ids],
+                    member_overrides=[
+                        (o.allow_bitmask, o.deny_bitmask) for o in overrides if o.server_member_id == member_id
+                    ],
+                )
+                if not permissions & Permission.VIEW_CHANNELS.value:
+                    continue
+            viewers.append(user_id)
+        return ChannelViewersResponse(user_ids=viewers)
 
     async def attach_my_permissions(self, db: AsyncSession, servers: list[Server], user_id: str) -> list[Server]:
         """Agrega a cada servidor y a cada uno de sus canales `my_permissions`: los permisos efectivos del
@@ -157,6 +204,25 @@ class ChannelAccessService:
             can_manage_messages=can_manage_messages,
             can_add_reactions=can_add_reactions,
         )
+
+    async def get_welcome_channel_id(
+        self, db: AsyncSession, server_id: uuid.UUID, default_role_bitmask: int, default_role_id: uuid.UUID
+    ) -> uuid.UUID | None:
+        """Canal donde se avisa que alguien se unió: el primer canal de texto de la barra lateral que el rol
+        por defecto (@everyone) puede ver, así lo ven el que llega y todos los miembros. None si no hay."""
+        channels = await self.repo.get_text_channels_in_sidebar_order(db, server_id)
+        overrides = defaultdict(list)
+        for override in await self.repo.get_role_overrides_for_channels(
+            db, [channel.id for channel in channels], default_role_id
+        ):
+            overrides[override.channel_id].append((override.allow_bitmask, override.deny_bitmask))
+        for channel in channels:
+            permissions = effective_channel_permissions(
+                role_bitmasks=[default_role_bitmask], role_overrides=overrides[channel.id], member_overrides=[]
+            )
+            if permissions & Permission.VIEW_CHANNELS.value:
+                return channel.id
+        return None
 
     async def get_visible_text_channels(
         self, db: AsyncSession, user_id: str, server_id: uuid.UUID | None = None
