@@ -96,6 +96,55 @@ class ChannelAccessRepository:
         )
         return list(result.scalars().all())
 
+    async def get_members_by_user_ids(
+        self, db: AsyncSession, server_id: uuid.UUID, user_ids: list[str]
+    ) -> list[tuple[uuid.UUID, str]]:
+        """(member_id, user_id) de los usuarios que son miembros del servidor, en una sola consulta."""
+        if not user_ids:
+            return []
+        result = await db.execute(
+            select(ServerMember.id, ServerMember.user_id).where(
+                ServerMember.server_id == server_id, ServerMember.user_id.in_(user_ids)
+            )
+        )
+        return [(member_id, user_id) for member_id, user_id in result.all()]
+
+    async def get_banned_user_ids(self, db: AsyncSession, server_id: uuid.UUID, user_ids: list[str]) -> set[str]:
+        """Los usuarios de la lista que están baneados del servidor."""
+        if not user_ids:
+            return set()
+        result = await db.execute(
+            select(ServerBan.user_id).where(ServerBan.server_id == server_id, ServerBan.user_id.in_(user_ids))
+        )
+        return set(result.scalars().all())
+
+    async def get_roles_for_members(
+        self, db: AsyncSession, member_ids: list[uuid.UUID]
+    ) -> list[tuple[uuid.UUID, uuid.UUID, int]]:
+        """(member_id, role_id, permissions_bitmask) de los roles de varios miembros, en una sola consulta."""
+        if not member_ids:
+            return []
+        result = await db.execute(
+            select(RoleAssignment.server_member_id, Role.id, Role.permissions_bitmask)
+            .join(Role, RoleAssignment.role_id == Role.id)
+            .where(RoleAssignment.server_member_id.in_(member_ids))
+        )
+        return [(member_id, role_id, bitmask) for member_id, role_id, bitmask in result.all()]
+
+    async def get_channel_overrides_for_members(
+        self, db: AsyncSession, channel_id: uuid.UUID, member_ids: list[uuid.UUID], role_ids: list[uuid.UUID]
+    ) -> list[ChannelPermissionOverride]:
+        """Reglas del canal para varios miembros y sus roles, en una sola consulta."""
+        conditions = [ChannelPermissionOverride.server_member_id.in_(member_ids)]
+        if role_ids:
+            conditions.append(ChannelPermissionOverride.role_id.in_(role_ids))
+        result = await db.execute(
+            select(ChannelPermissionOverride).where(
+                ChannelPermissionOverride.channel_id == channel_id, or_(*conditions)
+            )
+        )
+        return list(result.scalars().all())
+
     async def get_text_channels_in_sidebar_order(self, db: AsyncSession, server_id: uuid.UUID) -> list[Channel]:
         """Canales de texto en el orden de la barra lateral: primero los sin categoría, después cada
         categoría por su posición, y adentro por la posición del canal."""

@@ -74,6 +74,14 @@ class RoleService:
         await self._get_role(db, server_id, role_id)
         return await self.repo.get_members_by_role(db, server_id, role_id)
 
+    async def get_member_user_ids_by_role(
+        self, db: AsyncSession, server_id: uuid.UUID, role_id: uuid.UUID
+    ) -> list[str]:
+        """Endpoint interno, para que Notification resuelva una mención de rol. Sin chequeo de permisos. 404 si
+        el rol no existe o no es de ese servidor (también si el servidor no existe)."""
+        await self._get_role(db, server_id, role_id)
+        return [member.user_id for member in await self.repo.get_members_by_role(db, server_id, role_id)]
+
     async def assign_role_to_member(
         self, db: AsyncSession, server_id: uuid.UUID, user_id: str, role_id: uuid.UUID, target_user_id: str
     ):

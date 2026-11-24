@@ -1,5 +1,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 
+MAX_VIEWER_CANDIDATES = 5000
+
 
 class ChannelAccessResponse(BaseModel):
     server_id: str
@@ -22,6 +24,16 @@ class VisibleChannelsResponse(BaseModel):
     channel_ids: list[str]
     # Roles del usuario en esos servidores, sin el por defecto: Chat cuenta con esto las menciones de rol
     role_ids: list[str] = []
+
+
+class ChannelViewersRequest(BaseModel):
+    # Ids de usuario a filtrar (los mismos que /access?user_id=)
+    user_ids: list[str] = Field(max_length=MAX_VIEWER_CANDIDATES)
+
+
+class ChannelViewersResponse(BaseModel):
+    # Subconjunto de los pedidos que hoy puede ver el canal, sin duplicados y sin orden garantizado
+    user_ids: list[str]
 
 
 class CanSendResponse(BaseModel):
@@ -50,6 +62,13 @@ class ServerPermissionsResponse(BaseModel):
 class ServerMemberIdsResponse(BaseModel):
     server_id: str
     # Ids de usuario de todos los miembros, incluido el dueño
+    user_ids: list[str]
+
+
+class RoleMemberIdsResponse(BaseModel):
+    server_id: str
+    role_id: str
+    # Ids de usuario de los miembros que tienen el rol asignado
     user_ids: list[str]
 
 
